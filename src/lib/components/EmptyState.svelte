@@ -154,24 +154,34 @@
     </button>
   </div>
 
-  <!-- Recent files -->
-  {#if $recentFiles.length > 0}
-    <div class="section">
+  <!-- Recents section (reused: standalone 2-col, or as one grid cell) -->
+  {#snippet recentsSection(twoCol: boolean)}
+    <div class="section recents-section">
       <div class="section-header">
         <h2 class="section-title">Recent Files</h2>
         <button class="section-action" onclick={() => { clearRecentFiles(); }}>Clear</button>
       </div>
-      <div class="card card-scroll card-scroll-8">
-        {#each $recentFiles as file (file.path)}
-          {@render fileRow(file.name, shortenPath(file.path), formatTime(file.openedAt), () => openFile(file.path), 'file')}
-        {/each}
+      <div class="card card-scroll uniform-card">
+        <div class="recents-grid" class:two-col={twoCol}>
+          {#each $recentFiles as file (file.path)}
+            {@render fileRow(file.name, shortenPath(file.path), formatTime(file.openedAt), () => openFile(file.path), 'file')}
+          {/each}
+        </div>
       </div>
     </div>
+  {/snippet}
+
+  <!-- No folders pinned: recents owns the width in 2 columns -->
+  {#if $recentFiles.length > 0 && $pinnedFolders.length === 0}
+    {@render recentsSection(true)}
   {/if}
 
-  <!-- Plans + Pinned folders grid -->
+  <!-- Uniform card grid: recents (single-col) + plans + folders, all equal cells -->
   {#if (plans.length > 0 && !plansHidden) || $pinnedFolders.length > 0}
     <div class="panels-grid">
+      {#if $recentFiles.length > 0 && $pinnedFolders.length > 0}
+        {@render recentsSection(false)}
+      {/if}
       {#if plans.length > 0 && !plansHidden}
         <div class="section">
           <div class="section-header">
@@ -184,7 +194,7 @@
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
             </button>
           </div>
-          <div class="card card-scroll card-scroll-5">
+          <div class="card card-scroll uniform-card">
             {#each plans as plan (plan.path)}
               {@render fileRow(formatPlanName(plan.name), shortenPath(plan.path), formatTime(plan.modified), () => openFile(plan.path), 'plan')}
             {/each}
@@ -204,7 +214,7 @@
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
             </button>
           </div>
-          <div class="card card-scroll card-scroll-5">
+          <div class="card card-scroll uniform-card">
             {#if !folderFiles[folder]}
               <div class="card-empty">Loading...</div>
             {:else if folderFiles[folder].length === 0}
@@ -245,7 +255,7 @@
     display: flex;
     flex-direction: column;
     padding: 24px 32px;
-    max-width: 740px;
+    max-width: 1040px;
     margin: 0 auto;
     min-height: calc(100vh - 80px);
     gap: 16px;
@@ -443,14 +453,23 @@
     overflow-y: auto;
   }
 
-  /* ~7 items visible at ~45px per row */
-  .card-scroll-8 {
-    max-height: 322px;
-  }
+  /* Every card in the grid is the same fixed height and scrolls internally */
+  .uniform-card { height: 300px; }
 
-  /* ~4.5 items visible */
-  .card-scroll-5 {
-    max-height: 205px;
+  /* 2 columns when no folders are pinned; row-flow so it scrolls vertically */
+  .recents-grid.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .recents-grid.two-col .item:nth-child(even) {
+    border-left: 1px solid #f2f2f7;
+  }
+  :global(html.dark) .recents-grid.two-col .item:nth-child(even) {
+    border-left-color: #2c2c2e;
+  }
+  @media (max-width: 720px) {
+    .recents-grid.two-col { grid-template-columns: 1fr; }
+    .recents-grid.two-col .item:nth-child(even) { border-left: none; }
   }
 
   .card-empty {
@@ -481,6 +500,7 @@
 
   .item:hover { background: #f2f2f7; }
   :global(html.dark) .item:hover { background: #2c2c2e; }
+
 
   .item-icon {
     display: flex;
@@ -533,11 +553,14 @@
   }
   :global(html.dark) .item-time { color: #48484a; }
 
-  /* Panels grid — plans + folders side by side */
+  /* Panels grid — recents + plans + folders, 2 columns max */
   .panels-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .panels-grid { grid-template-columns: 1fr; }
   }
 
   /* Footer */
