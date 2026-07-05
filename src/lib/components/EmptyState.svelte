@@ -6,6 +6,7 @@
   import { pinnedFolders } from "../stores/pinned";
   import { settings } from "../stores/settings";
   import UpdateBanner from "./UpdateBanner.svelte";
+  import brandLogo from "$lib/assets/mdhero-icon.png";
 
   let { onOpenUrl = () => {} }: { onOpenUrl?: () => void } = $props();
 
@@ -109,9 +110,11 @@
 <div class="empty-root" style="zoom: {scale};">
   <!-- Hero bar -->
   <div class="hero-bar">
-    <h1 class="hero-title">MDHero</h1>
-    <span class="hero-sep">&mdash;</span>
-    <p class="hero-desc">A native Markdown reader and editor.</p>
+    <img src={brandLogo} alt="MDHero" width="44" height="44" class="hero-logo" />
+    <div class="hero-text">
+      <h1 class="hero-title">MDHero</h1>
+      <p class="hero-desc">A native Markdown reader and editor.</p>
+    </div>
   </div>
 
   <!-- Update banner (renders nothing when no update available or dismissed) -->
@@ -245,9 +248,20 @@
   /* Hero bar */
   .hero-bar {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
+    align-items: center;
+    gap: 12px;
     padding-bottom: 4px;
+  }
+
+  .hero-logo {
+    flex-shrink: 0;
+    border-radius: 9px;
+  }
+
+  .hero-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
   }
 
   .hero-title {
@@ -257,12 +271,6 @@
     margin: 0;
   }
   :global(html.dark) .hero-title { color: #e5e5e7; }
-
-  .hero-sep {
-    color: #d1d1d6;
-    font-size: 14px;
-  }
-  :global(html.dark) .hero-sep { color: #3a3a3c; }
 
   .hero-desc {
     font-size: 13px;
