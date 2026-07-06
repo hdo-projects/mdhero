@@ -200,6 +200,8 @@
       </svg>
     </button>
 
+    <div class="separator"></div>
+
     <button
       onclick={onEditToggle}
       class="btn btn-icon"
