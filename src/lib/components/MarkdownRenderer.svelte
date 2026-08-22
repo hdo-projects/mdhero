@@ -555,26 +555,80 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
 
-  /* Code block dark mode override for highlight.js */
+  /* Code block dark mode override for highlight.js.
+   *
+   * This mirrors highlight.js's own `github-dark` theme, selector group for
+   * selector group, against the `github` (light) theme imported in app.css.
+   * It deliberately covers EVERY class the light theme colours — not a
+   * hand-picked subset.
+   *
+   * The subset approach was the bug in #67: any class the light theme styled
+   * but the dark override missed kept its light colour against #0d1117.
+   * `.hljs-subst`, `.hljs-emphasis` and `.hljs-strong` are #24292e — near-black
+   * on a near-black background, i.e. invisible — and `.hljs-bullet` (#735c0f),
+   * `.hljs-literal`/`.hljs-operator` (#005cc5) and friends were barely legible.
+   * Fixing only the tokens in the bug report would have left the rest invisible.
+   *
+   * Source: node_modules/highlight.js/styles/github-dark.min.css
+   * `tests/unit/hljs-dark-coverage.test.ts` fails if the two ever drift apart,
+   * so a highlight.js upgrade that adds a class can't silently reintroduce this.
+   */
   :global(html.dark) article :global(pre) {
     background: #0d1117 !important;
-    color: #e6edf3 !important;
+    color: #c9d1d9 !important;
   }
+  :global(html.dark) article :global(.hljs) { color: #c9d1d9 !important; background: #0d1117 !important; }
 
-  :global(html.dark) article :global(.hljs-keyword) { color: #ff7b72 !important; }
+  :global(html.dark) article :global(.hljs-doctag),
+  :global(html.dark) article :global(.hljs-keyword),
+  :global(html.dark) article :global(.hljs-meta .hljs-keyword),
+  :global(html.dark) article :global(.hljs-template-tag),
+  :global(html.dark) article :global(.hljs-template-variable),
+  :global(html.dark) article :global(.hljs-type),
+  :global(html.dark) article :global(.hljs-variable.language_) { color: #ff7b72 !important; }
+
+  :global(html.dark) article :global(.hljs-title),
+  :global(html.dark) article :global(.hljs-title.class_),
+  :global(html.dark) article :global(.hljs-title.class_.inherited__),
+  :global(html.dark) article :global(.hljs-title.function_) { color: #d2a8ff !important; }
+
+  :global(html.dark) article :global(.hljs-attr),
+  :global(html.dark) article :global(.hljs-attribute),
+  :global(html.dark) article :global(.hljs-literal),
+  :global(html.dark) article :global(.hljs-meta),
+  :global(html.dark) article :global(.hljs-number),
+  :global(html.dark) article :global(.hljs-operator),
+  :global(html.dark) article :global(.hljs-selector-attr),
+  :global(html.dark) article :global(.hljs-selector-class),
+  :global(html.dark) article :global(.hljs-selector-id),
+  :global(html.dark) article :global(.hljs-variable) { color: #79c0ff !important; }
+
+  :global(html.dark) article :global(.hljs-meta .hljs-string),
+  :global(html.dark) article :global(.hljs-regexp),
   :global(html.dark) article :global(.hljs-string) { color: #a5d6ff !important; }
-  :global(html.dark) article :global(.hljs-comment) { color: #8b949e !important; }
-  :global(html.dark) article :global(.hljs-number) { color: #79c0ff !important; }
-  :global(html.dark) article :global(.hljs-function) { color: #d2a8ff !important; }
-  :global(html.dark) article :global(.hljs-title) { color: #d2a8ff !important; }
-  :global(html.dark) article :global(.hljs-built_in) { color: #ffa657 !important; }
-  :global(html.dark) article :global(.hljs-type) { color: #ffa657 !important; }
-  :global(html.dark) article :global(.hljs-attr) { color: #79c0ff !important; }
-  :global(html.dark) article :global(.hljs-variable) { color: #ffa657 !important; }
-  :global(html.dark) article :global(.hljs-params) { color: #e6edf3 !important; }
-  :global(html.dark) article :global(.hljs-meta) { color: #79c0ff !important; }
-  :global(html.dark) article :global(.hljs-addition) { color: #aff5b4 !important; background: rgba(46,160,67,0.15) !important; }
-  :global(html.dark) article :global(.hljs-deletion) { color: #ffdcd7 !important; background: rgba(248,81,73,0.15) !important; }
+
+  :global(html.dark) article :global(.hljs-built_in),
+  :global(html.dark) article :global(.hljs-symbol) { color: #ffa657 !important; }
+
+  :global(html.dark) article :global(.hljs-code),
+  :global(html.dark) article :global(.hljs-comment),
+  :global(html.dark) article :global(.hljs-formula) { color: #8b949e !important; }
+
+  :global(html.dark) article :global(.hljs-name),
+  :global(html.dark) article :global(.hljs-quote),
+  :global(html.dark) article :global(.hljs-selector-pseudo),
+  :global(html.dark) article :global(.hljs-selector-tag) { color: #7ee787 !important; }
+
+  :global(html.dark) article :global(.hljs-subst) { color: #c9d1d9 !important; }
+  /* The one deliberate deviation from upstream github-dark: its #1f6feb scores
+   * 4.08:1 against #0d1117, under the 4.5:1 WCAG AA floor the test enforces.
+   * #58a6ff is GitHub's own dark-mode blue and scores 7.49:1. */
+  :global(html.dark) article :global(.hljs-section) { color: #58a6ff !important; font-weight: 700; }
+  :global(html.dark) article :global(.hljs-bullet) { color: #f2cc60 !important; }
+  :global(html.dark) article :global(.hljs-emphasis) { color: #c9d1d9 !important; font-style: italic; }
+  :global(html.dark) article :global(.hljs-strong) { color: #c9d1d9 !important; font-weight: 700; }
+  :global(html.dark) article :global(.hljs-addition) { color: #aff5b4 !important; background-color: #033a16 !important; }
+  :global(html.dark) article :global(.hljs-deletion) { color: #ffdcd7 !important; background-color: #67060c !important; }
 
   /* Mermaid */
   article :global(.mermaid-diagram) {
