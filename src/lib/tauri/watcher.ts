@@ -1,4 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { reloadCurrentFile } from "./files";
 import { tabStore } from "../stores/tabs";
 
@@ -24,6 +25,10 @@ export async function startFileWatcher(filePath: string): Promise<void> {
       reloadCurrentFile(filePath);
     }, 100);
   });
+
+  // The Rust watcher tracks only one file. Re-start it whenever the active
+  // tab changes so returning to a previously opened tab watches its file again.
+  invoke("start_watching", { path: filePath }).catch(() => {});
 }
 
 export function stopFileWatcher(): void {

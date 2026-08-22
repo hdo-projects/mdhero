@@ -57,7 +57,6 @@ export async function openFile(path: string): Promise<void> {
 
     addRecentFile(absolutePath, fileName);
     getCurrentWindow().setTitle(`${fileName} — MDHero`).catch(() => {});
-    invoke("start_watching", { path: absolutePath }).catch(() => {});
   } catch (err) {
     document.set({
       filePath: absolutePath,
@@ -113,7 +112,6 @@ export async function saveAsNewDocument(tabId: string, content: string): Promise
   tabStore.rebindPath(tabId, chosen, fileName);
   addRecentFile(chosen, fileName);
   getCurrentWindow().setTitle(`${fileName} — MDHero`).catch(() => {});
-  invoke("start_watching", { path: chosen }).catch(() => {});
   return chosen;
 }
 
