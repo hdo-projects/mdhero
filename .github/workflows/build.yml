@@ -21,6 +21,8 @@ jobs:
             name: macOS
           - platform: windows-latest
             name: Windows
+          - platform: windows-11-arm
+            name: Windows 11 ARM
           - platform: ubuntu-22.04
             name: Linux
 
