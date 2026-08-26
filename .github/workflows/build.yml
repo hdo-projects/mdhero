@@ -23,6 +23,8 @@ jobs:
             name: Windows
           - platform: ubuntu-22.04
             name: Linux
+          - platform: ubuntu-22.04-arm
+            name: Linux arm64
 
     runs-on: ${{ matrix.platform }}
 
@@ -45,7 +47,7 @@ jobs:
           workspaces: src-tauri -> target
       
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu-')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
