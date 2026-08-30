@@ -15,10 +15,13 @@ const { startFileWatcher, stopFileWatcher } = await import("../../src/lib/tauri/
 
 describe("file watcher", () => {
   beforeEach(() => {
+    // Reset module state BEFORE clearing the mocks: stopFileWatcher now invokes
+    // "stop_watching", and that teardown call must not show up in the per-test
+    // call counts below.
+    stopFileWatcher();
     vi.clearAllMocks();
     listen.mockResolvedValue(vi.fn());
     invoke.mockResolvedValue(undefined);
-    stopFileWatcher();
   });
 
   it("restarts the backend watcher when switching between file tabs", async () => {
@@ -31,6 +34,20 @@ describe("file watcher", () => {
     expect(invoke).toHaveBeenNthCalledWith(3, "start_watching", { path: "C:/docs/a.md" });
     expect(invoke).toHaveBeenCalledTimes(3);
     expect(listen).toHaveBeenCalledTimes(3);
+  });
+
+  // Closing the last tab used to leave the Rust watcher running: an external
+  // edit to the closed file then pushed it back into the document store, on top
+  // of the home screen.
+  it("stops the backend watcher, not just the event listener", async () => {
+    const firstUnlisten = vi.fn();
+    listen.mockResolvedValueOnce(firstUnlisten);
+
+    await startFileWatcher("C:/docs/a.md");
+    stopFileWatcher();
+
+    expect(firstUnlisten).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenLastCalledWith("stop_watching");
   });
 
   it("unsubscribes the previous event listener when switching files", async () => {
