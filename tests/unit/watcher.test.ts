@@ -15,13 +15,15 @@ const { startFileWatcher, stopFileWatcher } = await import("../../src/lib/tauri/
 
 describe("file watcher", () => {
   beforeEach(() => {
-    // Reset module state BEFORE clearing the mocks: stopFileWatcher now invokes
-    // "stop_watching", and that teardown call must not show up in the per-test
-    // call counts below.
-    stopFileWatcher();
-    vi.clearAllMocks();
+    // Order matters twice over. The mocks are configured first because
+    // stopFileWatcher now invokes "stop_watching" and awaits it — an
+    // unconfigured vi.fn() returns undefined, not a promise. Then the teardown
+    // runs, and clearAllMocks wipes its calls so they don't land in the
+    // per-test counts below (it clears calls only, implementations survive).
     listen.mockResolvedValue(vi.fn());
     invoke.mockResolvedValue(undefined);
+    stopFileWatcher();
+    vi.clearAllMocks();
   });
 
   it("restarts the backend watcher when switching between file tabs", async () => {
