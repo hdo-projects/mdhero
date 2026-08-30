@@ -356,38 +356,20 @@
       return;
     }
 
-    // Security: never hand executable/script types to the OS opener. A clicked
-    // link with deceptive text could otherwise launch a pre-existing payload in
-    // one click. Everything else (PDF, images, docs…) opens in the default app.
-    if (isExecutablePath(resolved)) {
-      showToast(`Won't open executable file “${name}”. Open it from your file manager if you trust it.`);
-      return;
-    }
-
+    // Everything else (PDF, images, docs…) opens in the default app. The
+    // refusal of executable/script types now lives in the Rust `open_local_file`
+    // command — a guard in this file could be skipped by anything able to call
+    // invoke, so it protected only well-behaved callers. Rust reports a refusal
+    // with the sentinel "executable"; the wording stays here.
     try {
       await openWithSystem(resolved);
-    } catch {
-      showToast(`Couldn't open “${name}”`);
+    } catch (err) {
+      if (String(err).includes("executable")) {
+        showToast(`Won't open executable file “${name}”. Open it from your file manager if you trust it.`);
+      } else {
+        showToast(`Couldn't open “${name}”`);
+      }
     }
-  }
-
-  // Extensions that can run code when opened with the OS default handler.
-  const EXECUTABLE_EXTENSIONS = new Set([
-    // macOS / shell / scripting
-    "app", "command", "sh", "bash", "zsh", "scpt", "applescript",
-    "terminal", "workflow", "action", "osascript",
-    // Windows
-    "exe", "bat", "cmd", "com", "scr", "ps1", "vbs", "vbe", "js", "jse",
-    "wsf", "msi", "msp", "cpl", "lnk", "reg", "hta", "pif",
-    // cross-platform
-    "jar",
-  ]);
-
-  function isExecutablePath(path: string): boolean {
-    const name = path.split(/[\\/]/).pop() || "";
-    const dot = name.lastIndexOf(".");
-    if (dot < 0) return false;
-    return EXECUTABLE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
   }
 
   // View / Split / Edit segmented control (#19). Split & Edit are both editing
