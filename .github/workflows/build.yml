@@ -2,17 +2,55 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev, "fix/**", "ci/**"]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Fast feedback: unit tests + type check on a single Linux runner. Runs on
+  # every branch, including the `dev` integration branch and the per-fix
+  # branches, so a regression surfaces without waiting on the 5-platform
+  # bundle matrix below.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Advisory for now: `svelte-check` has never run in CI, so the existing
+      # baseline is unknown. Once it reports clean, drop continue-on-error so
+      # type regressions actually fail the build.
+      - name: Type check
+        run: pnpm check
+        continue-on-error: true
+
   build:
+    # Bundling all five platforms is expensive (macOS runners bill at 10x), so
+    # it stays on main, tags and PRs. Pushes to dev / fix branches get the
+    # `test` job only; use workflow_dispatch to force a full bundle.
+    if: >-
+      github.event_name != 'push'
+      || github.ref == 'refs/heads/main'
+      || startsWith(github.ref, 'refs/tags/')
     strategy:
       fail-fast: false
       matrix:
