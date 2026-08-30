@@ -25,7 +25,13 @@ const config = {
     csp: {
       mode: "hash",
       directives: {
-        "default-src": ["self"],
+        // ipc: / http://ipc.localhost sit in default-src, not just connect-src.
+        // That is what the Tauri API's own docs prescribe, and it covers the
+        // bridge whichever transport the platform's webview uses — a fetch is
+        // governed by connect-src, but anything else would fall back to here
+        // and be blocked. These schemes are Tauri's alone; admitting them costs
+        // nothing.
+        "default-src": ["self", "ipc:", "http://ipc.localhost"],
         // No 'unsafe-inline': that would re-admit exactly the injected
         // handlers this is meant to stop. The boot script is allowed by hash.
         "script-src": ["self"],
