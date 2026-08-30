@@ -6,6 +6,7 @@
   import { tocEntries, activeHeadingId, extractToc, isObserverPaused } from "$lib/stores/toc";
   import { aiLookup, setPendingSelection } from "$lib/stores/aiLookup";
   import mermaid from "mermaid";
+  import DOMPurify from "dompurify";
 
   let {
     html = "",
@@ -47,7 +48,16 @@
     mermaid.initialize({
       startOnLoad: false,
       theme,
-      securityLevel: "loose",
+      // NEVER relax this to "loose"/"antiscript". MDHero renders documents the
+      // user did not write (files opened from disk, markdown fetched from a
+      // URL). "loose" disables Mermaid's own label sanitization and allows raw
+      // HTML inside node labels, so `A["<img src=x onerror=…>"]` in a diagram
+      // executes. That script gets the webview's Tauri IPC bridge
+      // (window.__TAURI_INTERNALS__.invoke), i.e. arbitrary file writes via
+      // write_markdown_file — a document-opens-to-code-execution chain.
+      // The cost of "strict" is that Mermaid `click` directives stop working;
+      // that is the exact feature being abused, and no diagram needs it here.
+      securityLevel: "strict",
       themeVariables: isDark ? {
         primaryColor: "#0A1E2E",
         primaryTextColor: "#e5e5e7",
@@ -62,6 +72,24 @@
         signalColor: "#aeaeb2",
         signalTextColor: "#e5e5e7",
       } : {},
+    });
+  }
+
+  /**
+   * Sanitize a Mermaid-produced SVG before it reaches the DOM.
+   *
+   * The profiles keep what Mermaid actually emits: SVG shapes, the `<style>`
+   * block carrying the diagram theme, and the HTML inside `<foreignObject>`
+   * that renders node labels. DOMPurify strips event handlers (`onerror`,
+   * `onload`, …), `<script>`, and `javascript:` URLs regardless of profile —
+   * which is the whole point.
+   */
+  function sanitizeSvg(svg: string): string {
+    return DOMPurify.sanitize(svg, {
+      USE_PROFILES: { svg: true, svgFilters: true, html: true },
+      // Mermaid inlines its theme as a <style> element inside the <svg>;
+      // without this the diagram renders unstyled.
+      ADD_TAGS: ["style"],
     });
   }
 
@@ -84,7 +112,12 @@
         const { svg } = await mermaid.render(id, source);
         const container = document.createElement("div");
         container.className = "mermaid-diagram my-4 flex justify-center";
-        container.innerHTML = svg;
+        // Second line of defence. The document HTML is sanitized in the render
+        // pipeline, but this SVG is produced afterwards from the diagram source
+        // and would otherwise reach the DOM unfiltered — DOMPurify here means a
+        // future Mermaid regression (or a config slip back to "loose") can't by
+        // itself turn a diagram into script execution.
+        container.innerHTML = sanitizeSvg(svg);
         pre.replaceWith(container);
       } catch {
         // Leave the code block as-is if Mermaid fails
