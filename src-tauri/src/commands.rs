@@ -6,6 +6,66 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Manager,
 };
+use tauri_plugin_opener::OpenerExt;
+
+/// Extensions the OS would *execute* rather than display. A markdown document
+/// can link to any path, and link text is attacker-controlled ("see the
+/// report"), so handing one of these to the system opener turns a single click
+/// into code execution against a payload that is already on disk.
+///
+/// This list is enforced in Rust rather than in the webview: the frontend check
+/// it replaces could be skipped entirely by anything able to call `invoke`, so
+/// it protected only well-behaved code paths.
+const EXECUTABLE_EXTENSIONS: &[&str] = &[
+    // macOS / shell / scripting
+    "app", "command", "sh", "bash", "zsh", "scpt", "applescript", "terminal", "workflow", "action",
+    "osascript",
+    // Windows
+    "exe", "bat", "cmd", "com", "scr", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
+    "msi", "msp", "mst", "cpl", "lnk", "reg", "hta", "pif", "url", "scf", "msc", "appref-ms",
+    "gadget", "inf",
+    // Linux desktop
+    "desktop", "appimage", "run", "out",
+    // cross-platform runtimes
+    "jar", "py", "pyw", "rb", "pl", "php",
+];
+
+fn is_executable_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .map(|e| EXECUTABLE_EXTENSIONS.contains(&e.as_str()))
+        .unwrap_or(false)
+}
+
+/// Open a file referenced by the current document in the OS default app (#30).
+///
+/// Replaces the frontend's direct `opener.openPath()` call, which required the
+/// `opener:allow-open-path` capability to be granted over `**` — i.e. any path
+/// on the machine, reachable by any script in the webview. Routing through this
+/// command keeps the capability off the JS bridge entirely and puts the
+/// executable check somewhere it cannot be bypassed.
+///
+/// Returns the sentinel error `"executable"` for a refused type so the frontend
+/// can surface its own wording without duplicating the extension list.
+#[tauri::command]
+pub fn open_local_file(app: AppHandle, path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+
+    if !p.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    if !p.is_file() {
+        return Err(format!("Not a file: {}", path));
+    }
+    if is_executable_path(p) {
+        return Err("executable".to_string());
+    }
+
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|e| format!("Failed to open file: {}", e))
+}
 
 /// Explicitly quit the app — used by the "Close on Escape" setting when
 /// closing the last tab. On macOS this is needed because the standard
@@ -373,4 +433,39 @@ pub fn show_ai_context_menu(
     window.popup_menu(&menu).map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_executable_path;
+    use std::path::Path;
+
+    #[test]
+    fn refuses_executable_types_case_insensitively() {
+        for p in [
+            "/tmp/payload.sh",
+            "/tmp/payload.EXE",
+            "C:\Users\x\setup.MsI",
+            "/tmp/shortcut.lnk",
+            "/tmp/launcher.desktop",
+            "/tmp/app.AppImage",
+            "/tmp/link.url",
+        ] {
+            assert!(is_executable_path(Path::new(p)), "{p} should be refused");
+        }
+    }
+
+    #[test]
+    fn allows_document_types() {
+        for p in [
+            "/tmp/report.pdf",
+            "/tmp/diagram.png",
+            "/tmp/notes.txt",
+            "/tmp/sheet.xlsx",
+            "/tmp/no-extension",
+            "/tmp/archive.tar.gz",
+        ] {
+            assert!(!is_executable_path(Path::new(p)), "{p} should be allowed");
+        }
+    }
 }
