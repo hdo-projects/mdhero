@@ -45,12 +45,15 @@ jobs:
 
   build:
     # Bundling all five platforms is expensive (macOS runners bill at 10x), so
-    # it stays on main, tags and PRs. Pushes to dev / fix branches get the
-    # `test` job only; use workflow_dispatch to force a full bundle.
+    # it is scoped by ref rather than by event: main, tags, and PRs. Everything
+    # else — pushes to dev / fix branches, and manual runs against them — gets
+    # the `test` job alone. Keying this off the event instead meant any
+    # workflow_dispatch dragged the full matrix along, which is precisely what
+    # you don't want when re-running tests on a branch.
     if: >-
-      github.event_name != 'push'
-      || github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main'
       || startsWith(github.ref, 'refs/tags/')
+      || github.event_name == 'pull_request'
     strategy:
       fail-fast: false
       matrix:
