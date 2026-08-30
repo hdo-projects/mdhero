@@ -6,6 +6,66 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Manager,
 };
+use tauri_plugin_opener::OpenerExt;
+
+/// Extensions the OS would *execute* rather than display. A markdown document
+/// can link to any path, and link text is attacker-controlled ("see the
+/// report"), so handing one of these to the system opener turns a single click
+/// into code execution against a payload that is already on disk.
+///
+/// This list is enforced in Rust rather than in the webview: the frontend check
+/// it replaces could be skipped entirely by anything able to call `invoke`, so
+/// it protected only well-behaved code paths.
+const EXECUTABLE_EXTENSIONS: &[&str] = &[
+    // macOS / shell / scripting
+    "app", "command", "sh", "bash", "zsh", "scpt", "applescript", "terminal", "workflow", "action",
+    "osascript",
+    // Windows
+    "exe", "bat", "cmd", "com", "scr", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
+    "msi", "msp", "mst", "cpl", "lnk", "reg", "hta", "pif", "url", "scf", "msc", "appref-ms",
+    "gadget", "inf",
+    // Linux desktop
+    "desktop", "appimage", "run", "out",
+    // cross-platform runtimes
+    "jar", "py", "pyw", "rb", "pl", "php",
+];
+
+fn is_executable_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .map(|e| EXECUTABLE_EXTENSIONS.contains(&e.as_str()))
+        .unwrap_or(false)
+}
+
+/// Open a file referenced by the current document in the OS default app (#30).
+///
+/// Replaces the frontend's direct `opener.openPath()` call, which required the
+/// `opener:allow-open-path` capability to be granted over `**` — i.e. any path
+/// on the machine, reachable by any script in the webview. Routing through this
+/// command keeps the capability off the JS bridge entirely and puts the
+/// executable check somewhere it cannot be bypassed.
+///
+/// Returns the sentinel error `"executable"` for a refused type so the frontend
+/// can surface its own wording without duplicating the extension list.
+#[tauri::command]
+pub fn open_local_file(app: AppHandle, path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+
+    if !p.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    if !p.is_file() {
+        return Err(format!("Not a file: {}", path));
+    }
+    if is_executable_path(p) {
+        return Err("executable".to_string());
+    }
+
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|e| format!("Failed to open file: {}", e))
+}
 
 /// Explicitly quit the app — used by the "Close on Escape" setting when
 /// closing the last tab. On macOS this is needed because the standard
@@ -48,6 +108,56 @@ pub fn write_markdown_file(path: String, content: String) -> Result<(), String> 
     fs::write(p, content).map_err(|e| format!("Failed to write file: {}", e))
 }
 
+/// The current user's home directory.
+///
+/// `std::env::var("HOME")` is not set on Windows, so every caller that used it
+/// failed there — the "Plans" list was permanently empty on Windows builds.
+/// Kept dependency-free on purpose: `USERPROFILE` (plus the HOMEDRIVE/HOMEPATH
+/// fallback for older/roaming setups) is what Windows actually provides.
+pub fn home_dir() -> Option<std::path::PathBuf> {
+    #[cfg(windows)]
+    {
+        if let Some(profile) = std::env::var_os("USERPROFILE").filter(|s| !s.is_empty()) {
+            return Some(std::path::PathBuf::from(profile));
+        }
+        match (
+            std::env::var_os("HOMEDRIVE").filter(|s| !s.is_empty()),
+            std::env::var_os("HOMEPATH").filter(|s| !s.is_empty()),
+        ) {
+            (Some(drive), Some(rest)) => {
+                let mut joined = std::ffi::OsString::from(drive);
+                joined.push(&rest);
+                Some(std::path::PathBuf::from(joined))
+            }
+            _ => None,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME")
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from)
+    }
+}
+
+/// Strip Windows' verbatim prefix (`\\?\`) that `canonicalize` returns.
+///
+/// The prefix is valid but leaks into anything that displays the path, and it
+/// breaks naive string handling on the frontend. `\\?\UNC\server\share` folds
+/// back to `\\server\share`. No-op on other platforms.
+fn strip_verbatim_prefix(path: String) -> String {
+    #[cfg(windows)]
+    {
+        if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{}", rest);
+        }
+        if let Some(rest) = path.strip_prefix(r"\\?\") {
+            return rest.to_string();
+        }
+    }
+    path
+}
+
 #[tauri::command]
 pub fn resolve_path(path: String) -> Result<String, String> {
     let p = Path::new(&path);
@@ -63,7 +173,7 @@ pub fn resolve_path(path: String) -> Result<String, String> {
         .canonicalize()
         .unwrap_or(absolute)
         .to_str()
-        .map(|s| s.to_string())
+        .map(|s| strip_verbatim_prefix(s.to_string()))
         .ok_or_else(|| format!("Path is not valid UTF-8: {}", path))
 }
 
@@ -96,8 +206,8 @@ pub fn allow_assets(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn list_claude_plans() -> Result<Vec<PlanFile>, String> {
-    let home = std::env::var("HOME").map_err(|_| "Cannot determine home directory".to_string())?;
-    let plans_dir = Path::new(&home).join(".claude").join("plans");
+    let home = home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let plans_dir = home.join(".claude").join("plans");
 
     if !plans_dir.exists() {
         return Ok(Vec::new());
@@ -373,4 +483,57 @@ pub fn show_ai_context_menu(
     window.popup_menu(&menu).map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_executable_path;
+    use std::path::Path;
+
+    #[test]
+    fn refuses_executable_types_case_insensitively() {
+        for p in [
+            "/tmp/payload.sh",
+            "/tmp/payload.EXE",
+            r"C:\Users\x\setup.MsI",
+            "/tmp/shortcut.lnk",
+            "/tmp/launcher.desktop",
+            "/tmp/app.AppImage",
+            "/tmp/link.url",
+        ] {
+            assert!(is_executable_path(Path::new(p)), "{p} should be refused");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn strips_the_verbatim_prefix_canonicalize_returns() {
+        use super::strip_verbatim_prefix;
+        assert_eq!(
+            strip_verbatim_prefix(r"\\?\C:\Users\hugo\a.md".to_string()),
+            r"C:\Users\hugo\a.md"
+        );
+        assert_eq!(
+            strip_verbatim_prefix(r"\\?\UNC\server\share\a.md".to_string()),
+            r"\\server\share\a.md"
+        );
+        assert_eq!(
+            strip_verbatim_prefix(r"C:\Users\hugo\a.md".to_string()),
+            r"C:\Users\hugo\a.md"
+        );
+    }
+
+    #[test]
+    fn allows_document_types() {
+        for p in [
+            "/tmp/report.pdf",
+            "/tmp/diagram.png",
+            "/tmp/notes.txt",
+            "/tmp/sheet.xlsx",
+            "/tmp/no-extension",
+            "/tmp/archive.tar.gz",
+        ] {
+            assert!(!is_executable_path(Path::new(p)), "{p} should be allowed");
+        }
+    }
 }

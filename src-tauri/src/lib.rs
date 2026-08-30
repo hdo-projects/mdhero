@@ -82,6 +82,7 @@ pub fn run() {
             commands::resolve_path,
             commands::path_exists,
             commands::allow_assets,
+            commands::open_local_file,
             commands::list_claude_plans,
             commands::list_folder_md_files,
             commands::quit_app,
@@ -125,6 +126,9 @@ pub fn run() {
                         }
                         "find" => {
                             let _ = window.eval("window.__mdhero_find?.()");
+                        }
+                        "close" => {
+                            let _ = window.eval("window.__mdhero_close_tab?.()");
                         }
                         "check_updates" => {
                             let _ = window.eval("window.__mdhero_check_updates?.()");

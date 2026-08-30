@@ -5,6 +5,7 @@ import { document } from "../stores/document";
 import { tabStore } from "../stores/tabs";
 import { renderFull } from "../renderer/pipeline";
 import { addRecentFile } from "../stores/recents";
+import { basename } from "../utils/path";
 
 export async function readMarkdownFile(path: string): Promise<string> {
   return invoke<string>("read_markdown_file", { path });
@@ -16,7 +17,7 @@ export async function saveFile(path: string, content: string): Promise<void> {
 
 export async function openFile(path: string): Promise<void> {
   const absolutePath = await resolvePath(path);
-  const fileName = absolutePath.split("/").pop() ?? absolutePath;
+  const fileName = basename(absolutePath);
   const baseDir = getBaseDir(absolutePath);
 
   document.set({
@@ -107,7 +108,7 @@ export async function saveAsNewDocument(tabId: string, content: string): Promise
   });
   if (!chosen) return null;
 
-  const fileName = chosen.split("/").pop() ?? chosen;
+  const fileName = basename(chosen);
   await saveFile(chosen, content);
   tabStore.rebindPath(tabId, chosen, fileName);
   addRecentFile(chosen, fileName);
@@ -143,7 +144,7 @@ export async function reloadCurrentFile(path: string): Promise<void> {
     const content = await readMarkdownFile(absolutePath);
     const baseDir = getBaseDir(absolutePath);
     const result = renderFull(content, baseDir);
-    const fileName = absolutePath.split("/").pop() ?? absolutePath;
+    const fileName = basename(absolutePath);
 
     await allowAssets(result.assetPaths);
 
@@ -179,10 +180,18 @@ export async function pathExists(path: string): Promise<boolean> {
   return invoke<boolean>("path_exists", { path });
 }
 
-/** Open a non-markdown local file in the OS default app (#30). */
+/**
+ * Open a non-markdown local file in the OS default app (#30).
+ *
+ * Routed through the Rust `open_local_file` command instead of the opener
+ * plugin's JS binding. That let the `opener:allow-open-path` capability — which
+ * had to be granted over `**`, i.e. every path on the machine, to any script in
+ * the webview — be dropped entirely, and it puts the executable-type refusal
+ * somewhere the webview cannot skip. Rejects with `"executable"` for a refused
+ * type; the caller owns the wording.
+ */
 export async function openWithSystem(path: string): Promise<void> {
-  const { openPath } = await import("@tauri-apps/plugin-opener");
-  await openPath(path);
+  await invoke("open_local_file", { path });
 }
 
 /**

@@ -15,8 +15,9 @@
     saveFile,
   } from "$lib/tauri/files";
   import { showToast } from "$lib/stores/toast";
+  import { basename } from "$lib/utils/path";
   import { settings, getContentMaxWidth } from "$lib/stores/settings";
-  import { startFileWatcher } from "$lib/tauri/watcher";
+  import { startFileWatcher, stopFileWatcher } from "$lib/tauri/watcher";
   import { themeMode, cycleTheme } from "$lib/stores/theme";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { invoke } from "@tauri-apps/api/core";
@@ -283,7 +284,7 @@
         const saved = await saveAsNewDocument(tab.id, tab.editContent);
         if (!saved) return; // cancelled — keep editing, stays dirty
         targetPath = saved;
-        targetName = saved.split("/").pop() ?? saved;
+        targetName = basename(saved);
       } else {
         await saveFile(tab.filePath, tab.editContent);
       }
@@ -344,7 +345,7 @@
     if (!target) return;
 
     const resolved = resolveLocalPath(target, getBaseDir(tab.filePath));
-    const name = resolved.split(/[\\/]/).pop() || resolved;
+    const name = basename(resolved);
 
     if (!(await pathExists(resolved))) {
       showToast(`Can't find “${name}”`);
@@ -356,38 +357,20 @@
       return;
     }
 
-    // Security: never hand executable/script types to the OS opener. A clicked
-    // link with deceptive text could otherwise launch a pre-existing payload in
-    // one click. Everything else (PDF, images, docs…) opens in the default app.
-    if (isExecutablePath(resolved)) {
-      showToast(`Won't open executable file “${name}”. Open it from your file manager if you trust it.`);
-      return;
-    }
-
+    // Everything else (PDF, images, docs…) opens in the default app. The
+    // refusal of executable/script types now lives in the Rust `open_local_file`
+    // command — a guard in this file could be skipped by anything able to call
+    // invoke, so it protected only well-behaved callers. Rust reports a refusal
+    // with the sentinel "executable"; the wording stays here.
     try {
       await openWithSystem(resolved);
-    } catch {
-      showToast(`Couldn't open “${name}”`);
+    } catch (err) {
+      if (String(err).includes("executable")) {
+        showToast(`Won't open executable file “${name}”. Open it from your file manager if you trust it.`);
+      } else {
+        showToast(`Couldn't open “${name}”`);
+      }
     }
-  }
-
-  // Extensions that can run code when opened with the OS default handler.
-  const EXECUTABLE_EXTENSIONS = new Set([
-    // macOS / shell / scripting
-    "app", "command", "sh", "bash", "zsh", "scpt", "applescript",
-    "terminal", "workflow", "action", "osascript",
-    // Windows
-    "exe", "bat", "cmd", "com", "scr", "ps1", "vbs", "vbe", "js", "jse",
-    "wsf", "msi", "msp", "cpl", "lnk", "reg", "hta", "pif",
-    // cross-platform
-    "jar",
-  ]);
-
-  function isExecutablePath(path: string): boolean {
-    const name = path.split(/[\\/]/).pop() || "";
-    const dot = name.lastIndexOf(".");
-    if (dot < 0) return false;
-    return EXECUTABLE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
   }
 
   // View / Split / Edit segmented control (#19). Split & Edit are both editing
@@ -450,6 +433,23 @@
     return true;
   }
 
+  // Close the active tab, from either Cmd+W route (the File > Close Tab menu
+  // item, or the keydown fallback). The guard makes a double-fire harmless: if
+  // a platform delivers both the menu accelerator and the keydown for one press,
+  // the second call returns instead of closing a second tab. handleCloseTab
+  // always awaits at least a microtask, so the flag is set before it can re-enter.
+  let closeInFlight = false;
+  async function closeActiveTab() {
+    if (closeInFlight) return;
+    closeInFlight = true;
+    try {
+      const t = tabStore.getActiveTab();
+      if (t) await handleCloseTab(t.id);
+    } finally {
+      closeInFlight = false;
+    }
+  }
+
   // Close-on-ESC: close the active file tab, and quit the app if it was the last
   // one (on macOS closing the window alone leaves the app in the dock). Async
   // because the dirty-confirm dialog is — a cancelled discard must not quit.
@@ -487,6 +487,13 @@
     };
     (window as any).__mdhero_find = () => {
       searchVisible = !searchVisible;
+    };
+    // File > Close Tab (Cmd/Ctrl+W). The menu item declared this accelerator
+    // but lib.rs had no branch for its id, so the event was dropped — and
+    // because the native menu consumes the key, the keydown fallback never ran
+    // either: the shortcut and the menu item were both dead.
+    (window as any).__mdhero_close_tab = () => {
+      void closeActiveTab();
     };
     (window as any).__mdhero_zen = () => {
       zenMode = !zenMode;
@@ -824,12 +831,12 @@
       return;
     }
 
-    // Cmd+W close tab (with dirty confirm)
+    // Cmd+W close tab (with dirty confirm). Usually dead code: the File menu
+    // binds the same accelerator and native menus consume the key before the
+    // webview sees it. Kept as the fallback for any platform where it doesn't.
     if ((e.metaKey || e.ctrlKey) && e.key === "w") {
       e.preventDefault();
-      const t = tabStore.getActiveTab();
-      if (!t) return;
-      void handleCloseTab(t.id);
+      void closeActiveTab();
       return;
     }
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
@@ -1011,10 +1018,31 @@
     });
   });
 
-  // Watch for file path changes to set up watcher (only when path actually changes)
+  // Start/stop the file watcher as the active document changes.
+  //
+  // The stop half matters: closing the last tab leaves docStore.filePath null,
+  // and without an explicit teardown the watcher for the file just closed kept
+  // running. An external edit to it then fired reloadCurrentFile, which calls
+  // docStore.set — so a document the user had closed reappeared on top of the
+  // home screen. `url://` joins the sentinels here too: it is not a filesystem
+  // path, so start_watching could never do anything useful with it.
   $effect(() => {
     const path = $docStore.filePath;
-    if (path && !path.startsWith("paste://") && !path.startsWith("new://") && path !== lastWatchedPath) {
+    const watchable =
+      !!path
+      && !path.startsWith("paste://")
+      && !path.startsWith("new://")
+      && !path.startsWith("url://");
+
+    if (!watchable) {
+      if (lastWatchedPath !== null) {
+        lastWatchedPath = null;
+        stopFileWatcher();
+      }
+      return;
+    }
+
+    if (path !== lastWatchedPath) {
       lastWatchedPath = path;
       startFileWatcher(path);
     }
