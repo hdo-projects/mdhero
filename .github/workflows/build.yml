@@ -43,6 +43,55 @@ jobs:
         run: pnpm check
         continue-on-error: true
 
+  # The Rust half of the same idea. `tauri build` never compiles #[cfg(test)]
+  # code, so the unit tests in src-tauri were being carried along without ever
+  # being built, let alone run — a green 5-platform matrix said nothing about
+  # them. Own job rather than a step in `build`, so they run on every branch
+  # like the JS tests do, instead of only on main / tags / PRs.
+  rust-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      # tauri-build validates that `frontendDist` (../build) exists, so the
+      # frontend has to be built before cargo touches the crate — otherwise the
+      # job fails for a reason that has nothing to do with the tests.
+      - name: Build frontend
+        run: pnpm install && pnpm build
+
+      # The menu_window integration test needs a desktop GUI stack and opts out
+      # on Linux by design (it prints a skip notice and exits 0), so this runs
+      # the commands.rs unit tests.
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test
+
   build:
     # Bundling all five platforms is expensive (macOS runners bill at 10x), so
     # it is scoped by ref rather than by event: main, tags, and PRs. Everything
