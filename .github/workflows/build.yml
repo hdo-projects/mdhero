@@ -243,6 +243,50 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+      # Tauri notarizes and staples the .app, then wraps the stapled app in a
+      # .dmg — but it never submits the .dmg itself. The disk image therefore
+      # ships signed but unnotarized, and Gatekeeper rejects it the first time
+      # anyone opens the download (#116). The app inside is unaffected, so this
+      # is purely the first-open moment for a new user — on the most downloaded
+      # asset we publish.
+      #
+      # This runs after tauri-action because tauri-action both builds AND
+      # uploads on a tag build, so the notarized copy has to replace the one it
+      # already attached. Secrets are consumed by notarytool, never emitted.
+      - name: Notarize and staple the .dmg
+        if: matrix.platform == 'macos-latest' && startsWith(github.ref, 'refs/tags/')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(src-tauri/target/release/bundle/dmg/*.dmg)
+          if [ ${#dmgs[@]} -eq 0 ]; then
+            echo "::error::no .dmg was produced — nothing to notarize"
+            exit 1
+          fi
+          for dmg in "${dmgs[@]}"; do
+            echo "==> notarizing $(basename "$dmg")"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$dmg"
+
+            # Prove it rather than assume it: a stapled ticket and a Gatekeeper
+            # accept are the two things #116 measured as missing. Failing here
+            # is better than shipping another unnotarized image.
+            xcrun stapler validate "$dmg"
+            spctl -a -vvv -t open --context context:primary-signature "$dmg"
+
+            echo "==> replacing the copy tauri-action already uploaded"
+            gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber
+          done
+
       - name: Clean up keychain
         if: always() && matrix.platform == 'macos-latest' && github.event_name != 'pull_request'
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
