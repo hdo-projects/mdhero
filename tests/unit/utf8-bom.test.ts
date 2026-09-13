@@ -105,10 +105,17 @@ describe("UTF-8 BOM (#122)", () => {
       expect(render(BOM + BOM + "# Head\n")).toContain("\uFEFF");
     });
 
-    it("leaves a document without a BOM untouched", () => {
+    it("keys on U+FEFF exactly, not on 'the first character looks invisible'", () => {
+      // A different zero-width character at offset 0 must survive. ZWSP makes
+      // the line start with something other than `#`, so this renders as a
+      // paragraph — spec-correct CommonMark, and the character is still there.
+      // The previous version of this test compared render(doc) to itself, which
+      // could not fail; this is the assertion it was meant to be.
+      expect(render("\u200B# Head\n")).toContain("\u200B");
+
       const doc = "# Head\n\ntext\n";
-      expect(render(doc)).toBe(render(doc));
       expect(render(doc)).toMatch(/<h1[^>]*>Head<\/h1>/);
+      expect(render(doc)).not.toContain(BOM);
     });
   });
 
