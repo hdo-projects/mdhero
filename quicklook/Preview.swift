@@ -143,11 +143,18 @@ final class PreviewViewController: NSViewController, QLPreviewingController,
     /// A JS string literal for arbitrary document text. JSON handles quoting and
     /// control characters; `<` is escaped as well so no document content can
     /// close the surrounding `<script>` element.
+    ///
+    /// U+2028/U+2029 are escaped too. JSON permits them raw inside a string and
+    /// `JSONSerialization` emits them that way, but they were illegal in a JS
+    /// string literal before ES2019. Current WKWebView accepts them, so this is
+    /// belt-and-braces against a document terminating the boot script early.
     private static func jsString(_ s: String) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [s]),
               let json = String(data: data, encoding: .utf8) else { return "\"\"" }
         return String(json.dropFirst().dropLast())
             .replacingOccurrences(of: "<", with: "\\u003C")
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
     }
 
     // MARK: - Delegates

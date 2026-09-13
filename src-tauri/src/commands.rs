@@ -54,7 +54,21 @@ pub fn read_markdown_file(path: String) -> Result<String, String> {
         return Err(format!("Not a file: {}", path));
     }
 
-    fs::read_to_string(p).map_err(|e| format!("Failed to read file: {}", e))
+    fs::read_to_string(p).map_err(|e| {
+        // `read_to_string` rejects anything that is not valid UTF-8, which is
+        // what a UTF-16 save looks like — Notepad offers it in the same Save As
+        // dropdown that produces the BOM in #122. The raw io error ("stream did
+        // not contain valid UTF-8") tells a user nothing they can act on.
+        if e.kind() == std::io::ErrorKind::InvalidData {
+            format!(
+                "{} is not UTF-8 encoded, so it cannot be opened. \
+                 Re-save it as UTF-8 (in Notepad: File > Save As > Encoding: UTF-8).",
+                path
+            )
+        } else {
+            format!("Failed to read file: {}", e)
+        }
+    })
 }
 
 #[tauri::command]
@@ -540,7 +554,9 @@ pub fn show_ai_context_menu(
 
 #[cfg(test)]
 mod fs_scope_tests {
+    use super::test_support::scratch;
     use super::{has_allowed_extension, read_markdown_file, write_markdown_file};
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -574,6 +590,41 @@ mod fs_scope_tests {
         let err = write_markdown_file("/root/.ssh/authorized_keys".into(), "x".into()).unwrap_err();
         assert!(err.contains("Refusing to write"), "got: {err}");
     }
+
+    #[test]
+    fn a_utf8_bom_is_returned_to_the_caller_untouched() {
+        // #122 is fixed in the renderer, not here, because the Quick Look
+        // extension never calls this command. Pinning the pass-through keeps
+        // the read non-destructive: a BOM'd file that is edited and saved is
+        // written back with its signature intact, rather than silently having
+        // its encoding changed.
+        let dir = scratch("bom");
+        let file = dir.join("bom.md");
+        fs::write(&file, b"\xEF\xBB\xBF# Head\n").unwrap();
+
+        let got = read_markdown_file(file.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(got, "\u{FEFF}# Head\n");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_non_utf8_file_reports_the_encoding_rather_than_the_io_error() {
+        // Notepad offers UTF-16 in the same Save As dropdown that produces the
+        // BOM in #122. `read_to_string` rejects it with "stream did not contain
+        // valid UTF-8", which tells a user nothing actionable.
+        let dir = scratch("utf16");
+        let file = dir.join("utf16.md");
+        // UTF-16 LE BOM followed by "# Hi"
+        fs::write(&file, b"\xFF\xFE\x23\x00\x20\x00\x48\x00\x69\x00").unwrap();
+
+        let err = read_markdown_file(file.to_string_lossy().into_owned()).unwrap_err();
+        assert!(err.contains("not UTF-8 encoded"), "got: {err}");
+        assert!(err.contains("Re-save it as UTF-8"), "got: {err}");
+        assert!(!err.contains("stream did not contain"), "raw io error leaked: {err}");
+
+        fs::remove_dir_all(&dir).ok();
+    }
 }
 
 #[cfg(all(test, windows))]
@@ -598,10 +649,9 @@ mod tests {
 }
 
 #[cfg(test)]
-mod asset_scope_tests {
-    use super::{partition_assets, partition_assets_below};
+mod test_support {
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -609,15 +659,28 @@ mod asset_scope_tests {
     /// A fresh directory under the OS temp dir. On macOS that lives behind a
     /// symlink (`/var` → `/private/var`), which is deliberate: it proves the
     /// comparison happens on canonical paths, not on the strings handed in.
-    fn scratch() -> PathBuf {
+    ///
+    /// The counter is what keeps directories distinct: every test in a binary
+    /// shares one `process::id()`, and the harness runs them on threads.
+    pub fn scratch(prefix: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "mdhero-asset-scope-{}-{}",
+            "mdhero-{}-{}-{}",
+            prefix,
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::SeqCst)
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
+}
+
+#[cfg(test)]
+mod asset_scope_tests {
+    use super::test_support::scratch;
+    use super::{partition_assets, partition_assets_below};
+    use std::fs;
+    use std::path::Path;
+
 
     fn touch(path: &Path) -> String {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -631,7 +694,7 @@ mod asset_scope_tests {
 
     #[test]
     fn accepts_an_image_beside_the_document_and_returns_it_canonical() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("note.md");
         touch(&doc);
         let pic = touch(&dir.join("pic.png"));
@@ -644,7 +707,7 @@ mod asset_scope_tests {
 
     #[test]
     fn accepts_images_in_subfolders_of_the_document() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("note.md");
         touch(&doc);
         let pic = touch(&dir.join("img").join("deep").join("pic.png"));
@@ -657,7 +720,7 @@ mod asset_scope_tests {
 
     #[test]
     fn rejects_traversal_above_the_document_tree() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("notes").join("note.md");
         touch(&doc);
         let secret = touch(&dir.join("secret.txt"));
@@ -672,7 +735,7 @@ mod asset_scope_tests {
 
     #[test]
     fn widens_to_the_enclosing_git_checkout_but_no_further() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let repo = dir.join("repo");
         fs::create_dir_all(repo.join(".git")).unwrap();
         let doc = repo.join("docs").join("guide.md");
@@ -689,7 +752,7 @@ mod asset_scope_tests {
     #[test]
     fn never_widens_to_the_ceiling_or_above_it() {
         // A dotfiles checkout at ~/.git must not turn "~" into an asset root.
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let home = dir.join("home");
         fs::create_dir_all(home.join(".git")).unwrap();
         fs::create_dir_all(dir.join(".git")).unwrap(); // and one above home
@@ -708,7 +771,7 @@ mod asset_scope_tests {
 
     #[test]
     fn a_checkout_below_the_ceiling_still_widens() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let home = dir.join("home");
         let repo = home.join("code").join("repo");
         fs::create_dir_all(repo.join(".git")).unwrap();
@@ -726,7 +789,7 @@ mod asset_scope_tests {
     #[test]
     fn a_git_file_marks_a_checkout_too() {
         // Worktrees and submodules keep a `.git` *file*, not a directory.
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let repo = dir.join("wt");
         touch(&repo.join(".git"));
         let doc = repo.join("docs").join("guide.md");
@@ -740,7 +803,7 @@ mod asset_scope_tests {
 
     #[test]
     fn a_pinned_folder_is_an_allowed_root() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("notes").join("note.md");
         touch(&doc);
         let shared = touch(&dir.join("attachments").join("pic.png"));
@@ -757,7 +820,7 @@ mod asset_scope_tests {
 
     #[test]
     fn a_pinned_folder_does_not_match_by_string_prefix() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("elsewhere").join("note.md");
         touch(&doc);
         let pic = touch(&dir.join("attachments-private").join("pic.png"));
@@ -773,7 +836,7 @@ mod asset_scope_tests {
     #[cfg(unix)]
     #[test]
     fn rejects_a_symlink_that_escapes_the_tree() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("notes").join("note.md");
         touch(&doc);
         let secret = dir.join("secret.txt");
@@ -789,7 +852,7 @@ mod asset_scope_tests {
 
     #[test]
     fn rejects_missing_files_and_directories() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let doc = dir.join("note.md");
         touch(&doc);
         fs::create_dir_all(dir.join("folder")).unwrap();
@@ -804,7 +867,7 @@ mod asset_scope_tests {
 
     #[test]
     fn a_document_that_is_not_on_disk_gets_only_pinned_roots() {
-        let dir = scratch();
+        let dir = scratch("asset-scope");
         let pic = touch(&dir.join("pic.png"));
         let doc = Path::new("paste://1");
 
