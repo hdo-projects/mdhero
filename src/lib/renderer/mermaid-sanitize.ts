@@ -13,6 +13,12 @@
  * security work here — <script>, on* handlers and javascript: URLs are dropped
  * — while the diagram's shapes, text, styles and marker refs survive.
  *
+ * DOMPurify is pinned to 3.3.x and must stay there: 3.4 strips HTML out of
+ * <foreignObject>, which empties Mermaid `journey` diagrams entirely.
+ * `htmlLabels: false` does not cover that renderer. The reasoning, the measured
+ * evidence and the partial `textPlacement` workaround are in
+ * tests/unit/dompurify-pin.test.ts, which fails if the pin is lifted.
+ *
  * See CLAUDE.md's security invariants before changing anything in this file.
  */
 export const MERMAID_SANITIZE_CONFIG = {

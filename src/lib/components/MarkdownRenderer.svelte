@@ -53,6 +53,16 @@
       // JS/URL bindings from untrusted diagram source; the SVG is then sanitized
       // again below as defense in depth. (Felipe Boralli disclosure, 2026-08-14.)
       securityLevel: "strict",
+      // #security: render labels as SVG <text>, never as HTML inside
+      // <foreignObject>. DOMPurify >= 3.4 strips HTML from foreignObject (it is
+      // a known XSS vector -- the same class the Mermaid disclosure was about),
+      // which would otherwise leave every diagram with empty shapes. Keeping
+      // labels in pure SVG means there is no HTML inside the SVG to sanitize.
+      // The Quick Look path already carries these (#117); the drift guard in
+      // tests/unit/quicklook-bundle.test.ts keeps the two from separating.
+      htmlLabels: false,
+      flowchart: { htmlLabels: false },
+      class: { htmlLabels: false },
       themeVariables: isDark ? {
         primaryColor: "#0A1E2E",
         primaryTextColor: "#e5e5e7",
