@@ -90,13 +90,37 @@ export function isMarpDoc(frontmatter: Record<string, unknown> | null): boolean 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/;
 
 /**
+ * Drop a byte-order mark at offset 0.
+ *
+ * U+FEFF there is an encoding *signature*, not document content — Notepad's
+ * "UTF-8 with BOM" and many Windows tools prepend it. It is valid UTF-8, so
+ * Rust's `read_to_string` and Swift's `String(contentsOf:)` both hand it
+ * through untouched. markdown-it then sees `\uFEFF# Heading`, a line that no
+ * longer begins with `#`, and *every* leading block construct degrades to a
+ * paragraph — heading, list, blockquote, fenced code — taking frontmatter
+ * parsing and Marp detection down with it (#122).
+ *
+ * Only offset 0 is stripped. Anywhere else U+FEFF is a legitimate zero-width
+ * no-break space that belongs to the document.
+ *
+ * This lives in the pipeline rather than in the Rust read command because the
+ * Quick Look extension never calls that command — it reads the file itself in
+ * `quicklook/Preview.swift` and shares only this module. Stripping here is what
+ * fixes both hosts at once.
+ */
+function stripBom(markdown: string): string {
+  return markdown.charCodeAt(0) === 0xfeff ? markdown.slice(1) : markdown;
+}
+
+/**
  * Return the markdown body with any leading YAML-ish frontmatter block removed.
  * `renderFull` strips frontmatter internally, but the stored document content
  * keeps it — Marp slide splitting needs the body without it (#44).
  */
 export function stripFrontmatter(markdown: string): string {
-  const m = markdown.match(FRONTMATTER_RE);
-  return m ? m[2] : markdown;
+  const source = stripBom(markdown);
+  const m = source.match(FRONTMATTER_RE);
+  return m ? m[2] : source;
 }
 
 let md: MarkdownIt | null = null;
@@ -283,10 +307,14 @@ export function renderFull(markdown: string, baseDir?: string): RenderResult {
     initialized = true;
   }
 
+  // A leading BOM would make the first block unparseable; see stripBom (#122).
+  // Dropping it cannot shift `data-source-line`, since it removes no newline.
+  const source = stripBom(markdown);
+
   // Extract frontmatter
-  let content = markdown;
+  let content = source;
   let frontmatter: Record<string, unknown> | null = null;
-  const fmMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  const fmMatch = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (fmMatch) {
     try {
       const data: Record<string, unknown> = {};

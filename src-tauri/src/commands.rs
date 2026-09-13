@@ -54,7 +54,21 @@ pub fn read_markdown_file(path: String) -> Result<String, String> {
         return Err(format!("Not a file: {}", path));
     }
 
-    fs::read_to_string(p).map_err(|e| format!("Failed to read file: {}", e))
+    fs::read_to_string(p).map_err(|e| {
+        // `read_to_string` rejects anything that is not valid UTF-8, which is
+        // what a UTF-16 save looks like — Notepad offers it in the same Save As
+        // dropdown that produces the BOM in #122. The raw io error ("stream did
+        // not contain valid UTF-8") tells a user nothing they can act on.
+        if e.kind() == std::io::ErrorKind::InvalidData {
+            format!(
+                "{} is not UTF-8 encoded, so it cannot be opened. \
+                 Re-save it as UTF-8 (in Notepad: File > Save As > Encoding: UTF-8).",
+                path
+            )
+        } else {
+            format!("Failed to read file: {}", e)
+        }
+    })
 }
 
 #[tauri::command]
@@ -541,6 +555,7 @@ pub fn show_ai_context_menu(
 #[cfg(test)]
 mod fs_scope_tests {
     use super::{has_allowed_extension, read_markdown_file, write_markdown_file};
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -573,6 +588,43 @@ mod fs_scope_tests {
         assert!(err.contains("Refusing to read"), "got: {err}");
         let err = write_markdown_file("/root/.ssh/authorized_keys".into(), "x".into()).unwrap_err();
         assert!(err.contains("Refusing to write"), "got: {err}");
+    }
+
+    #[test]
+    fn a_utf8_bom_is_returned_to_the_caller_untouched() {
+        // #122 is fixed in the renderer, not here, because the Quick Look
+        // extension never calls this command. Pinning the pass-through keeps
+        // the read non-destructive: a BOM'd file that is edited and saved is
+        // written back with its signature intact, rather than silently having
+        // its encoding changed.
+        let dir = std::env::temp_dir().join(format!("mdhero-bom-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("bom.md");
+        fs::write(&file, b"\xEF\xBB\xBF# Head\n").unwrap();
+
+        let got = read_markdown_file(file.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(got, "\u{FEFF}# Head\n");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_non_utf8_file_reports_the_encoding_rather_than_the_io_error() {
+        // Notepad offers UTF-16 in the same Save As dropdown that produces the
+        // BOM in #122. `read_to_string` rejects it with "stream did not contain
+        // valid UTF-8", which tells a user nothing actionable.
+        let dir = std::env::temp_dir().join(format!("mdhero-utf16-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("utf16.md");
+        // UTF-16 LE BOM followed by "# Hi"
+        fs::write(&file, b"\xFF\xFE\x23\x00\x20\x00\x48\x00\x69\x00").unwrap();
+
+        let err = read_markdown_file(file.to_string_lossy().into_owned()).unwrap_err();
+        assert!(err.contains("not UTF-8 encoded"), "got: {err}");
+        assert!(err.contains("Re-save it as UTF-8"), "got: {err}");
+        assert!(!err.contains("stream did not contain"), "raw io error leaked: {err}");
+
+        fs::remove_dir_all(&dir).ok();
     }
 }
 
