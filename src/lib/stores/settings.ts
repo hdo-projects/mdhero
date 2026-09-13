@@ -28,6 +28,12 @@ const WIDE_MAX_WIDTH = "min(3840px, calc(100vw - clamp(48px, 8vw, 128px)))";
 export const DEFAULT_TOC_WIDTH = 240;
 export const MIN_TOC_WIDTH = 180;
 export const MAX_TOC_WIDTH = 520;
+/** Document width the sidebar must always leave behind. Without this the
+ *  sidebar can be dragged wider than the window (which `tauri.conf.json` lets
+ *  shrink to 400px), covering the document and putting the drag handle
+ *  off-screen — the exact complaint #108 was filed about, reintroduced by its
+ *  own fix. */
+export const MIN_DOCUMENT_WIDTH = 240;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -94,7 +100,19 @@ export const settings = createSettingsStore();
 /** Clamp an arbitrary stored or dragged value to a usable sidebar width (#108).
  *  Non-numeric input (a hand-edited localStorage entry, a NaN from a pointer
  *  event) falls back to the default rather than collapsing the sidebar to 0. */
-export function clampTocWidth(value: unknown): number {
+/** The widest the sidebar may be in a window of `viewportWidth`. Never returns
+ *  less than MIN_TOC_WIDTH: on a very narrow window a cramped sidebar still
+ *  beats one that cannot be grabbed. */
+export function maxTocWidthFor(viewportWidth: number): number {
+  return Math.max(
+    MIN_TOC_WIDTH,
+    Math.min(MAX_TOC_WIDTH, Math.round(viewportWidth) - MIN_DOCUMENT_WIDTH),
+  );
+}
+
+/** Pass `viewportWidth` to bound the result by the window as well as by
+ *  MAX_TOC_WIDTH. Omitted, only the static bounds apply. */
+export function clampTocWidth(value: unknown, viewportWidth?: number): number {
   // Deliberately not a bare Number(): Number(null), Number("") and Number([])
   // are all 0, which is finite, so junk would clamp to the minimum width and
   // look like a deliberate setting instead of falling back to the default.
@@ -105,7 +123,11 @@ export function clampTocWidth(value: unknown): number {
         ? Number(value)
         : NaN;
   if (!Number.isFinite(width)) return DEFAULT_TOC_WIDTH;
-  return clamp(Math.round(width), MIN_TOC_WIDTH, MAX_TOC_WIDTH);
+  const ceiling =
+    viewportWidth === undefined || !Number.isFinite(viewportWidth)
+      ? MAX_TOC_WIDTH
+      : maxTocWidthFor(viewportWidth);
+  return clamp(Math.round(width), MIN_TOC_WIDTH, ceiling);
 }
 
 export function getContentMaxWidth(value: ReaderSettings): string {
