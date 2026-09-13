@@ -1419,4 +1419,17 @@
     background: rgba(255, 255, 255, 0.025);
     border-right-color: rgba(255, 255, 255, 0.08);
   }
+
+  /* #110: app.css gives every <pre> a 1px print border. The gutter mirror is a
+     <div>, so it does not get one — and 2px of content width is enough to wrap
+     a long line differently in the two layers, drifting every number below it.
+     That border is meant to delimit code blocks inside rendered markdown; the
+     raw view is a single <pre> holding the whole document, where it also draws
+     an unwanted box around the printout. Dropped here rather than in app.css so
+     rendered code blocks keep it. */
+  @media print {
+    .raw-source {
+      border: none !important;
+    }
+  }
 </style>
