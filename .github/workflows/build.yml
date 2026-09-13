@@ -240,7 +240,9 @@ jobs:
             - **macOS** (Apple Silicon): Download the `.dmg` file
             - **Windows** (x64 or ARM64): Download the `.msi` installer or `-setup.exe` (NSIS) — pick the `x64` or `arm64` file for your machine
             - **Linux** (x64 or arm64): Download the `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE) or `.AppImage` (any distro) — `amd64`/`x86_64` or `arm64`/`aarch64`
-          releaseDraft: false
+          # Built as a DRAFT and published by the `publish` job below, once
+          # every platform has succeeded. See that job for why.
+          releaseDraft: true
           prerelease: false
 
       # Tauri notarizes and staples the .app, then wraps the stapled app in a
@@ -251,8 +253,9 @@ jobs:
       # asset we publish.
       #
       # This runs after tauri-action because tauri-action both builds AND
-      # uploads on a tag build, so the notarized copy has to replace the one it
-      # already attached. Secrets are consumed by notarytool, never emitted.
+      # uploads, so the notarized copy has to replace the one it already
+      # attached — to the DRAFT release, which nobody can see yet. Secrets are
+      # consumed by notarytool, never emitted.
       - name: Notarize and staple the .dmg
         if: matrix.platform == 'macos-latest' && startsWith(github.ref, 'refs/tags/')
         env:
@@ -283,7 +286,7 @@ jobs:
             xcrun stapler validate "$dmg"
             spctl -a -vvv -t open --context context:primary-signature "$dmg"
 
-            echo "==> replacing the copy tauri-action already uploaded"
+            echo "==> replacing the copy tauri-action attached to the draft"
             gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber
           done
 
@@ -305,3 +308,47 @@ jobs:
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: ignore
+
+  # The release is assembled as a draft and only becomes public here, after
+  # every platform has succeeded AND every expected asset is actually present.
+  #
+  # Before this job existed, tauri-action published immediately and the macOS
+  # notarization step ran afterwards. So any notarization failure — Apple
+  # rejects the submission, the credentials expire, the notary service is down —
+  # left a PUBLIC release carrying an unnotarized .dmg, which is the exact
+  # defect #116 reported. Draft-then-promote makes that unreachable: anything
+  # that fails leaves the release invisible, and a human decides what to do.
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the draft is complete, then publish it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+
+          assets=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name')
+          echo "assets on the draft:"
+          printf '%s\n' "$assets" | sed 's/^/  /'
+
+          # Five green ticks do not mean five platforms produced files: an
+          # upload step with `if-no-files-found: ignore` passes cheerfully while
+          # producing nothing. Assert presence per platform instead of inferring
+          # it. Anything missing leaves the release a draft.
+          missing=0
+          for pat in '[.]dmg$' 'app[.]tar[.]gz$' 'app[.]tar[.]gz[.]sig$' \
+                     '[.]msi$' '[-]setup[.]exe$' '[.]deb$' '[.]rpm$' \
+                     '[.]AppImage$' '^latest[.]json$'; do
+            if ! printf '%s\n' "$assets" | grep -qE "$pat"; then
+              echo "::error::no asset matches /$pat/ — leaving $tag as a draft"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
+          echo "published $tag"
