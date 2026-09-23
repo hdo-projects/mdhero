@@ -8,7 +8,7 @@ import {
   MIN_DOCUMENT_WIDTH,
 } from "../../src/lib/stores/settings";
 import { sideTabsWidth } from "../../src/lib/utils/layout";
-import { tabFolderLabel } from "../../src/lib/utils/path";
+import { tabFolderLabel, tabsNeedingFolder } from "../../src/lib/utils/path";
 
 // The side tabs panel is sized by the same rules as the ToC sidebar (#108):
 // a drag or a stored value can never collapse it or let it cover the document.
@@ -80,5 +80,43 @@ describe("tabFolderLabel", () => {
     expect(tabFolderLabel("new://1716000000000")).toBe("Not saved yet");
     expect(tabFolderLabel("url://https://github.com/a/b/blob/main/README.md")).toBe("github.com");
     expect(tabFolderLabel("url://not a url")).toBe("Web page");
+  });
+});
+
+describe("tabsNeedingFolder", () => {
+  const tab = (id: string, fileName: string, filePath: string) => ({ id, fileName, filePath });
+
+  it("shows the name alone when every name is different", () => {
+    const tabs = [
+      tab("a", "todo.md", "/Users/ada/notes/todo.md"),
+      tab("b", "README.md", "/Users/ada/dev/mdhero/README.md"),
+      tab("c", "Untitled", "new://1716000000000-0"),
+    ];
+    expect(tabsNeedingFolder(tabs)).toEqual(new Set());
+  });
+
+  it("adds the folder to same-named files, and only to them", () => {
+    const tabs = [
+      tab("a", "README.md", "/Users/ada/dev/mdhero/README.md"),
+      tab("b", "todo.md", "/Users/ada/notes/todo.md"),
+      tab("c", "README.md", "C:\\Users\\ada\\dev\\other\\README.md"),
+    ];
+    expect(tabsNeedingFolder(tabs)).toEqual(new Set(["a", "c"]));
+  });
+
+  it("tells a local file from a web page of the same name", () => {
+    const tabs = [
+      tab("a", "README.md", "/Users/ada/dev/mdhero/README.md"),
+      tab("b", "README.md", "url://https://github.com/a/b/blob/main/README.md"),
+    ];
+    expect(tabsNeedingFolder(tabs)).toEqual(new Set(["a", "b"]));
+  });
+
+  it("leaves it out when the folder would not tell them apart", () => {
+    const tabs = [
+      tab("a", "Untitled", "new://1716000000000-0"),
+      tab("b", "Untitled", "new://1716000000000-1"),
+    ];
+    expect(tabsNeedingFolder(tabs)).toEqual(new Set());
   });
 });
