@@ -1,7 +1,19 @@
 <script lang="ts">
+  import { get } from "svelte/store";
+  import { PanelLeft, PanelTop } from "@lucide/svelte";
   import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
+  import {
+    settings,
+    clampTabsWidth,
+    maxTabsWidthFor,
+    DEFAULT_TABS_WIDTH,
+    MIN_TABS_WIDTH,
+  } from "$lib/stores/settings";
+  import { tocVisible, tocEntries } from "$lib/stores/toc";
   import { newDocument, revealInFileManager } from "$lib/tauri/files";
   import { copyFileName, copyPath } from "$lib/utils/clipboard";
+  import { stripVerbatimPrefix, tabFolderLabel } from "$lib/utils/path";
+  import PanelResizer from "./PanelResizer.svelte";
 
   let {
     onCloseTab = (id: string) => tabStore.closeTab(id),
@@ -17,6 +29,20 @@
   // Result of the last copy (or failed reveal), shown in place of the label of
   // the entry clicked.
   let copyFeedback = $state<{ item: "path" | "name" | "reveal"; text: string } | null>(null);
+
+  // Tabs in a row across the top, or in a resizable panel on the left.
+  let side = $derived($settings.tabsPosition === "side");
+
+  function toggleTabsPosition() {
+    settings.update((s) => ({ ...s, tabsPosition: s.tabsPosition === "side" ? "top" : "side" }));
+  }
+
+  /** The width the side panel shares with the document: the window, less the
+   *  table of contents when it is showing. */
+  function availableWidth(): number {
+    const toc = get(tocVisible) && get(tocEntries).length > 0 ? get(settings).tocWidth : 0;
+    return window.innerWidth - toc;
+  }
 
   function handleClose(e: MouseEvent, id: string) {
     e.stopPropagation();
@@ -55,7 +81,10 @@
       const children = Array.from(tabbar.children) as HTMLElement[];
       for (let i = 0; i < children.length; i++) {
         const rect = children[i].getBoundingClientRect();
-        if (ev.clientX >= rect.left && ev.clientX < rect.right) {
+        const inside = side
+          ? ev.clientY >= rect.top && ev.clientY < rect.bottom
+          : ev.clientX >= rect.left && ev.clientX < rect.right;
+        if (inside) {
           overIndex = i;
           break;
         }
@@ -97,7 +126,12 @@
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const menuWidth = 160;
-    contextMenuPos = { x: Math.min(rect.left, window.innerWidth - menuWidth - 8), y: rect.bottom + 4 };
+    const maxX = window.innerWidth - menuWidth - 8;
+    // Beside a side tab rather than under it, where the menu would cover the
+    // next tab down.
+    contextMenuPos = side
+      ? { x: Math.min(rect.right + 4, maxX), y: rect.top }
+      : { x: Math.min(rect.left, maxX), y: rect.bottom + 4 };
     contextMenuTab = tab;
     copyFeedback = null;
   }
@@ -149,7 +183,11 @@
 
 <svelte:window onkeydowncapture={handleMenuKeydown} />
 
-<div class="tabbar">
+{#snippet tabName(tab: Tab)}
+  {#if tab.diskChanged}<span class="tab-disk" title="Changed on disk while you were editing">⟳</span>{:else if tab.dirty}<span class="tab-dirty" title="Unsaved changes">•</span>{/if}{tab.fileName}
+{/snippet}
+
+<div class="tabbar" class:side>
   <div class="tabbar-inner">
     <!-- Home tab -->
     <div
@@ -163,6 +201,7 @@
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
         <path d="M2 6.5L7 2l5 4.5V12H9V9H5v3H2V6.5z"/>
       </svg>
+      {#if side}<span class="tab-label">Home</span>{/if}
     </div>
 
     <!-- File tabs -->
@@ -177,10 +216,16 @@
           class="tab"
           class:active={$activeTabId === tab.id}
           class:drag-over={overIndex === idx && dragIndex !== idx && dragIndex >= 0}
+          title={side && isFileTab(tab) ? stripVerbatimPrefix(tab.filePath) : undefined}
         >
-          <span class="tab-label">
-            {#if tab.diskChanged}<span class="tab-disk" title="Changed on disk while you were editing">⟳</span>{:else if tab.dirty}<span class="tab-dirty" title="Unsaved changes">•</span>{/if}{tab.fileName}
-          </span>
+          {#if side}
+            <span class="tab-text">
+              <span class="tab-label">{@render tabName(tab)}</span>
+              <span class="tab-folder">{tabFolderLabel(tab.filePath)}</span>
+            </span>
+          {:else}
+            <span class="tab-label">{@render tabName(tab)}</span>
+          {/if}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
             role="button"
@@ -201,9 +246,36 @@
         <line x1="6" y1="2" x2="6" y2="10"/>
         <line x1="2" y1="6" x2="10" y2="6"/>
       </svg>
+      {#if side}<span>New tab</span>{/if}
+    </button>
+    <button
+      class="layout-btn"
+      onclick={toggleTabsPosition}
+      title={side ? "Show tabs at the top" : "Show tabs on the side"}
+      aria-label={side ? "Show tabs at the top" : "Show tabs on the side"}
+    >
+      {#if side}<PanelTop size={14} />{:else}<PanelLeft size={14} />{/if}
     </button>
   </div>
 </div>
+{#if side}
+  <!-- z-index 15 like the panel itself. `--tabs-w` is owned by +page.svelte,
+       which re-publishes it whenever the stored value changes. -->
+  <PanelResizer
+    width={$settings.tabsWidth}
+    min={MIN_TABS_WIDTH}
+    defaultWidth={DEFAULT_TABS_WIDTH}
+    clampWidth={(value) => clampTabsWidth(value, availableWidth())}
+    maxWidth={() => maxTabsWidthFor(availableWidth())}
+    cssVar="--tabs-w"
+    resizingClass="tabs-resizing"
+    label="Resize tabs panel"
+    left="calc(var(--tabs-w, 220px) - 3px)"
+    top="var(--chrome-top, 44px)"
+    zIndex={15}
+    onCommit={(width) => settings.update((s) => ({ ...s, tabsWidth: width }))}
+  />
+{/if}
 
 {#if contextMenuTab}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -399,6 +471,123 @@
   :global(html.dark) .new-tab-btn:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #22D3EE;
+  }
+
+  /* Moves the tabs between the top row and the side panel. At the far end of
+     the row; in the panel, on a header line of its own above Home. */
+  .layout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    margin-bottom: 2px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: #8e8e93;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+  }
+
+  .layout-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+    color: #0891B2;
+  }
+
+  :global(html.dark) .layout-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #22D3EE;
+  }
+
+  /* Side tabs: a fixed panel under the toolbar, as wide as `--tabs-w`. */
+  .tabbar.side {
+    position: fixed;
+    top: var(--chrome-top, 44px);
+    left: 0;
+    bottom: 0;
+    width: var(--tabs-w, 220px);
+    padding: 4px 6px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-right: 1px solid #d2d5da;
+  }
+
+  :global(html.dark) .tabbar.side {
+    border-right-color: #2c2c2e;
+  }
+
+  .tabbar.side .tabbar-inner,
+  .tabbar.side .tabbar-files {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tabbar.side .layout-btn {
+    order: -1;
+    align-self: flex-end;
+    margin: 0 0 2px;
+  }
+
+  .tabbar.side .tab {
+    max-width: none;
+    min-width: 0;
+    padding: 6px 6px 6px 10px;
+    border-radius: 8px;
+  }
+
+  .tabbar.side .home-tab {
+    padding: 7px 10px;
+    margin-bottom: 4px;
+  }
+
+  /* The accent moves from under the tab to its leading edge. */
+  .tabbar.side .tab.active {
+    border-bottom: none;
+    box-shadow: inset 3px 0 0 #0891B2, 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  :global(html.dark) .tabbar.side .tab.active {
+    box-shadow: inset 3px 0 0 #22D3EE, 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .tabbar.side .tab.drag-over {
+    border-left: none;
+    border-top: 2px solid #0891B2;
+  }
+
+  :global(html.dark) .tabbar.side .tab.drag-over {
+    border-top-color: #22D3EE;
+  }
+
+  .tab-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tab-folder {
+    font-size: 11px;
+    font-weight: 400;
+    color: #8e8e93;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :global(html.dark) .tab-folder {
+    color: #6e6e73;
+  }
+
+  .tabbar.side .new-tab-btn {
+    width: auto;
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 4px 0 0;
+    padding: 0 10px;
+    font-size: 12px;
   }
 
   .dropdown {

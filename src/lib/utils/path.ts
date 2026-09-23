@@ -45,3 +45,31 @@ export function shortenHomePath(path: string): string {
   if (!match) return normalized;
   return "~/" + match[1].replace(/\\/g, "/");
 }
+
+/**
+ * The line under a tab's name in the side tabs panel: the folder a file is in,
+ * or what kind of tab it is for the ones without a file. Only the last two
+ * folder segments are kept — enough to tell two README.md apart, without a
+ * long path that the ellipsis would cut from its useful end.
+ */
+export function tabFolderLabel(filePath: string): string {
+  if (filePath.startsWith("paste://")) return "Pasted";
+  if (filePath.startsWith("new://")) return "Not saved yet";
+  if (filePath.startsWith("url://")) {
+    try {
+      return new URL(filePath.slice("url://".length)).host;
+    } catch {
+      return "Web page";
+    }
+  }
+
+  // Shortened with the file name still on, so a file directly in the home
+  // directory comes out as `~` rather than the full home path.
+  const shortened = shortenHomePath(filePath);
+  const cut = Math.max(shortened.lastIndexOf("/"), shortened.lastIndexOf("\\"));
+  if (cut < 0) return "";
+  const folder = cut === 0 ? "/" : shortened.slice(0, cut);
+  const segments = folder.split(/[\\/]/).filter(Boolean);
+  if (segments.length <= 2) return folder.replace(/\\/g, "/");
+  return "…/" + segments.slice(-2).join("/");
+}
