@@ -18,6 +18,9 @@ export interface ReaderSettings {
   tabsPosition: "top" | "side";
   /** Width of the side tabs panel in px. */
   tabsWidth: number;
+  /** Theme of the rendered page, apart from the interface's: "auto" follows
+   *  the interface. */
+  pageTheme: "auto" | "light" | "dark";
 }
 
 const STORAGE_KEY = "mdhero-settings";
@@ -79,6 +82,7 @@ function loadSettings(): ReaderSettings {
     tocWidth: DEFAULT_TOC_WIDTH,
     tabsPosition: "top",
     tabsWidth: DEFAULT_TABS_WIDTH,
+    pageTheme: "auto",
   };
 
   if (typeof localStorage === "undefined") return defaults;
@@ -95,6 +99,7 @@ function loadSettings(): ReaderSettings {
         tocWidth: clampTocWidth(parsed.tocWidth),
         tabsPosition: parsed.tabsPosition === "side" ? "side" : "top",
         tabsWidth: clampTabsWidth(parsed.tabsWidth),
+        pageTheme: ["light", "dark"].includes(parsed.pageTheme) ? parsed.pageTheme : "auto",
       };
     }
   } catch {}
