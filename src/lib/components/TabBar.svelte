@@ -12,7 +12,7 @@
   import { tocVisible, tocEntries } from "$lib/stores/toc";
   import { newDocument } from "$lib/tauri/files";
   import { copyPath } from "$lib/utils/clipboard";
-  import { stripVerbatimPrefix, tabFolderLabel } from "$lib/utils/path";
+  import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import PanelResizer from "./PanelResizer.svelte";
 
   let {
@@ -30,6 +30,8 @@
 
   // Tabs in a row across the top, or in a resizable panel on the left.
   let side = $derived($settings.tabsPosition === "side");
+  // Side tabs whose folder goes under their name, to tell same-named files apart.
+  let withFolder = $derived(tabsNeedingFolder($tabs));
 
   function toggleTabsPosition() {
     settings.update((s) => ({ ...s, tabsPosition: s.tabsPosition === "side" ? "top" : "side" }));
@@ -181,7 +183,7 @@
           class:drag-over={overIndex === idx && dragIndex !== idx && dragIndex >= 0}
           title={side && isFileTab(tab) ? stripVerbatimPrefix(tab.filePath) : undefined}
         >
-          {#if side}
+          {#if side && withFolder.has(tab.id)}
             <span class="tab-text">
               <span class="tab-label">{@render tabName(tab)}</span>
               <span class="tab-folder">{tabFolderLabel(tab.filePath)}</span>
