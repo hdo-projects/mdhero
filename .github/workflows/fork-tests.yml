@@ -1,0 +1,83 @@
+name: Fork tests
+
+# Fork-only workflow. upstream's build.yml runs only for main, tags and PRs to
+# main, so pushes to the `dev` integration branch and to per-fix branches got
+# no feedback at all — and a manual run of build.yml drags the full 5-platform
+# bundle matrix along (macOS runners bill at 10x). This runs the same unit
+# tests, type check and Rust tests on a single Linux runner, and nothing else.
+#
+# Kept in its own file rather than as edits to build.yml, so that syncing main
+# from upstream never conflicts with it.
+on:
+  push:
+    branches: [dev, "fix/**", "ci/**"]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Type check
+        run: pnpm check
+
+  # Mirrors build.yml's rust-test job: `tauri build` never compiles
+  # #[cfg(test)] code, and tauri-build needs the frontend built first.
+  rust-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Build frontend
+        run: pnpm install && pnpm build
+
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test
