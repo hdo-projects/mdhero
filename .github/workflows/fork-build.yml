@@ -1,0 +1,54 @@
+name: Fork build
+
+# Fork-only workflow. Builds unsigned Windows x64 installers for the `build/**`
+# integration branches, which bundle feature branches that are not upstream yet.
+# upstream's build.yml only builds main, tags and PRs to main, and a manual run
+# of it drags the full 5-platform matrix along; this builds Windows alone.
+#
+# Kept in its own file rather than as edits to build.yml, so that syncing main
+# from upstream never conflicts with it.
+on:
+  push:
+    branches: ["build/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      # No release overlay: without the updater signing key, Tauri must not be
+      # asked to create updater artifacts.
+      - name: Build
+        run: pnpm tauri build
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v6
+        with:
+          name: mdhero-windows-x64
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
