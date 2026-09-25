@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { onDestroy, untrack } from "svelte";
 
   // The drag handle on the right edge of a fixed left panel: the table of
@@ -213,7 +214,7 @@
   aria-valuemin={min}
   aria-valuemax={ceiling}
   tabindex="0"
-  title="Drag to resize — double-click to reset"
+  title={$t('toc.resizeHint')}
   onpointerdown={startResize}
   onkeydown={handleKeydown}
   onkeyup={handleKeyup}

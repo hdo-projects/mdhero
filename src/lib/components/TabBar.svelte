@@ -14,6 +14,7 @@
   import { copyPath } from "$lib/utils/clipboard";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import PanelResizer from "./PanelResizer.svelte";
+  import { translate, t } from "$lib/i18n";
 
   let {
     onCloseTab = (id: string) => tabStore.closeTab(id),
@@ -143,13 +144,13 @@
   async function handleCopyPath() {
     if (!contextMenuTab) return;
     const success = await copyPath(contextMenuTab.filePath);
-    copyFeedback = success ? "Copied!" : "Failed";
+    copyFeedback = success ? translate("common.copied") : translate("common.copyFailed");
     setTimeout(closeContextMenu, 900);
   }
 </script>
 
 {#snippet tabName(tab: Tab)}
-  {#if tab.diskChanged}<span class="tab-disk" title="Changed on disk while you were editing">⟳</span>{:else if tab.dirty}<span class="tab-dirty" title="Unsaved changes">•</span>{/if}{tab.fileName}
+  {#if tab.diskChanged}<span class="tab-disk" title={$t('tabbar.diskChanged')}>⟳</span>{:else if tab.dirty}<span class="tab-dirty" title={$t('tabbar.unsaved')}>•</span>{/if}{tab.fileName}
 {/snippet}
 
 <div class="tabbar" class:side>
@@ -206,7 +207,7 @@
     </div>
 
     <!-- New tab button -->
-    <button class="new-tab-btn" onclick={handleNewTab} title="New tab">
+    <button class="new-tab-btn" onclick={handleNewTab} title={$t('tabbar.newTab')}>
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
         <line x1="6" y1="2" x2="6" y2="10"/>
         <line x1="2" y1="6" x2="10" y2="6"/>
@@ -247,7 +248,7 @@
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
   <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
     <button onclick={handleCopyPath} class="dropdown-item">
-      <span>{copyFeedback || "Copy Path"}</span>
+      <span>{copyFeedback || $t('tabbar.copyPath')}</span>
     </button>
   </div>
 {/if}
