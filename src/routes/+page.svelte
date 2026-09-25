@@ -1258,6 +1258,7 @@
         lineHeight={$settings.lineHeight}
         maxWidth="100%"
         showLineNumbers={$settings.showLineNumbers}
+        syntaxHighlighting={$settings.syntaxHighlighting}
         split
       />
       <main class="split-preview">
@@ -1275,6 +1276,7 @@
         lineHeight={$settings.lineHeight}
         maxWidth={contentMaxWidth}
         showLineNumbers={$settings.showLineNumbers}
+        syntaxHighlighting={$settings.syntaxHighlighting}
       />
     {:else if rawMode}
       <main class="content-main" class:toc-spaced={$tocVisible && $tocEntries.length > 0}>
