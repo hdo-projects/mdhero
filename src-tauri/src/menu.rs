@@ -201,6 +201,19 @@ pub fn create_menu_with_labels<R: Runtime>(
 /// whenever the user changes the interface language.
 #[tauri::command]
 pub fn set_menu_language(app: tauri::AppHandle, labels: MenuLabels) -> Result<(), String> {
+    use tauri::Manager;
+
     let menu = create_menu_with_labels(&app, &labels).map_err(|e| e.to_string())?;
-    app.set_menu(menu).map(|_| ()).map_err(|e| e.to_string())
+    // Setting the menu attaches it to every window again, which brings back a
+    // menu bar the user hid (menu_bar.rs), so hide those again afterwards.
+    let hidden: Vec<_> = app
+        .webview_windows()
+        .into_values()
+        .filter(|window| matches!(window.is_menu_visible(), Ok(false)))
+        .collect();
+    app.set_menu(menu).map_err(|e| e.to_string())?;
+    for window in hidden {
+        let _ = window.hide_menu();
+    }
+    Ok(())
 }
