@@ -1,5 +1,6 @@
 mod commands;
 pub mod menu;
+#[cfg(windows)]
 mod menu_bar;
 mod watcher;
 
@@ -87,7 +88,6 @@ pub fn run() {
             commands::list_folder_md_files,
             commands::quit_app,
             commands::show_ai_context_menu,
-            menu_bar::show_toolbar_context_menu,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::stop_watching,
@@ -98,10 +98,11 @@ pub fn run() {
             let menu = menu::create_menu(&handle)?;
             app.set_menu(menu)?;
 
-            // Keep the menu bar hidden if it was hidden (from the toolbar's
-            // right-click) when the app last ran.
+            // "Hide Menu Bar" in the webview's right-click menu, and the bar
+            // kept hidden if it was when the app last ran (Windows only).
+            #[cfg(windows)]
             if let Some(main_window) = app.get_webview_window("main") {
-                menu_bar::restore(&main_window);
+                menu_bar::setup(&main_window);
             }
 
             // Red-button (window) close routes through the frontend quit guard
@@ -150,8 +151,6 @@ pub fn run() {
                         "quit" => {
                             let _ = window.eval("window.__mdhero_quit?.()");
                         }
-                        // Toolbar right-click → "Menu Bar".
-                        menu_bar::TOGGLE_ID => menu_bar::toggle(&window),
                         // AI lookup right-click menu items — forward the
                         // structured ID to the frontend router. JSON-stringify
                         // the ID so embedded colons (and any future special

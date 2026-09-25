@@ -20,14 +20,3 @@ export function modifierKeyLabel(
 
 /** The label for this session's platform, resolved once at module load. */
 export const MOD = modifierKeyLabel();
-
-/**
- * Whether the platform string is Windows, the only platform where a
- * right-click on the toolbar can hide the menu bar (see
- * `src-tauri/src/menu_bar.rs`). Same parameter as `modifierKeyLabel`.
- */
-export function isWindows(
-  platform: string = typeof navigator !== "undefined" ? navigator.platform : ""
-): boolean {
-  return /^win/i.test(platform);
-}
