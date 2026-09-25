@@ -1233,6 +1233,7 @@
           lineHeight={$settings.lineHeight}
           maxWidth="100%"
           showLineNumbers={$settings.showLineNumbers}
+          syntaxHighlighting={$settings.syntaxHighlighting}
           split
         />
       {/key}
@@ -1253,6 +1254,7 @@
           lineHeight={$settings.lineHeight}
           maxWidth={contentMaxWidth}
           showLineNumbers={$settings.showLineNumbers}
+          syntaxHighlighting={$settings.syntaxHighlighting}
         />
       {/key}
     {:else if rawMode}
