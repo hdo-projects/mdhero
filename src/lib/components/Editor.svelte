@@ -333,7 +333,11 @@
     caret-color: #1c1c1e;
   }
 
+  /* Repeats `color: transparent`: the dark `.editor` rule above is more
+     specific than `.editor.highlighted` and would paint the plain text back
+     over the colored layer. */
   :global(html.dark) .editor.highlighted {
+    color: transparent;
     caret-color: #e5e5e7;
   }
 
