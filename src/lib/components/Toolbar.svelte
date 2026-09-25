@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
   import { document } from "../stores/document";
-  import { MOD } from "$lib/utils/platform";
+  import { MOD, isWindows } from "$lib/utils/platform";
   import { settings } from "../stores/settings";
   import { themeMode, cycleTheme, cyclePageTheme } from "../stores/theme";
   import { tocVisible, tocEntries, toggleToc, activeHeadingId } from "../stores/toc";
@@ -62,6 +63,20 @@
     const next = !showReaderControls;
     closeAll();
     showReaderControls = next;
+  }
+
+  // Right-click on the toolbar opens a native menu with one "Menu Bar" item,
+  // which hides or shows the menu bar above (src-tauri/src/menu_bar.rs).
+  // Windows only; elsewhere the right-click is left alone.
+  const canHideMenuBar = isWindows();
+
+  function handleContextMenu(e: MouseEvent) {
+    if (!canHideMenuBar) return;
+    e.preventDefault();
+    closeAll();
+    invoke("show_toolbar_context_menu").catch((err) =>
+      console.error("show_toolbar_context_menu failed:", err)
+    );
   }
 
   function toggleCopyMenu() {
@@ -129,7 +144,10 @@
   };
 </script>
 
-<header class="toolbar">
+<!-- The context menu also opens from the keyboard (Menu key, Shift+F10) on
+     any focused toolbar button, since the event bubbles up here. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<header class="toolbar" oncontextmenu={handleContextMenu}>
   <div class="toolbar-left">
     <img src={brandLogo} alt="MDHero" width="26" height="26" class="toolbar-logo" />
     <span class="toolbar-wordmark">MDHero</span>

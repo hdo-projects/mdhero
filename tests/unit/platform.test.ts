@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isMac, modifierKeyLabel } from "../../src/lib/utils/platform";
+import { isMac, isWindows, modifierKeyLabel } from "../../src/lib/utils/platform";
 
 // Every shortcut label used to be hardcoded "Cmd" (#62's Ubuntu screenshot
 // shows `Cmd+O` on the Linux home screen). The label is now derived from the
@@ -30,5 +30,20 @@ describe("isMac", () => {
     expect(isMac("Win32")).toBe(false);
     expect(isMac("Linux x86_64")).toBe(false);
     expect(isMac("")).toBe(false);
+  });
+});
+
+// Only Windows offers to hide the menu bar from the toolbar's right-click: the
+// macOS menu is the system's, and GTK drops a hidden menu bar's shortcuts.
+describe("isWindows", () => {
+  it("is true on Windows", () => {
+    expect(isWindows("Win32")).toBe(true);
+    expect(isWindows("Win64")).toBe(true);
+  });
+
+  it("is false on macOS, Linux and an unknown platform", () => {
+    expect(isWindows("MacIntel")).toBe(false);
+    expect(isWindows("Linux x86_64")).toBe(false);
+    expect(isWindows("")).toBe(false);
   });
 });
