@@ -1,5 +1,10 @@
-//! Hiding the menu bar (MDHero · File · Edit · View · Window) with a right-click
-//! on the toolbar, and bringing it back the same way.
+//! "Hide Menu Bar" / "Show Menu Bar" at the end of the webview's own
+//! right-click menu, to hide the menu bar (MDHero · File · Edit · View ·
+//! Window) or bring it back.
+//!
+//! The item joins the menu WebView2 already opens on the toolbar and the rest
+//! of the window, rather than replacing it; the parts of the page with a menu
+//! of their own (the document, the tabs) keep theirs.
 //!
 //! Windows only. On macOS the menu lives in the system menu bar, which an app
 //! cannot hide. On Linux, GTK only fires a menu item's shortcut while its menu
@@ -16,23 +21,23 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tauri::{
-    menu::{CheckMenuItem, Menu},
-    AppHandle, Manager, Runtime, WebviewWindow,
+use tauri::{webview::PlatformWebview, Manager, WebviewWindow};
+use webview2_com::{
+    ContextMenuRequestedEventHandler, CustomItemSelectedEventHandler,
+    Microsoft::Web::WebView2::Win32::*,
 };
+use windows::core::{Interface, BOOL, HSTRING};
 
 const PREFS_FILE: &str = "menu-bar.json";
-
-/// Id of the toolbar menu's item, handled in `lib.rs::setup`'s `on_menu_event`.
-pub const TOGGLE_ID: &str = "menubar:toggle";
 
 #[derive(Serialize, Deserialize)]
 struct MenuBarPrefs {
     hidden: bool,
 }
 
-fn prefs_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
-    app.path()
+fn prefs_path(window: &WebviewWindow) -> Option<PathBuf> {
+    window
+        .path()
         .app_config_dir()
         .ok()
         .map(|dir| dir.join(PREFS_FILE))
@@ -44,9 +49,9 @@ fn parse_hidden(json: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn save_hidden<R: Runtime>(app: &AppHandle<R>, hidden: bool) -> Result<(), String> {
-    let path =
-        prefs_path(app).ok_or_else(|| "Could not determine the config directory".to_string())?;
+fn save_hidden(window: &WebviewWindow, hidden: bool) -> Result<(), String> {
+    let path = prefs_path(window)
+        .ok_or_else(|| "Could not determine the config directory".to_string())?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("Failed to create config directory: {}", e))?;
@@ -55,23 +60,30 @@ fn save_hidden<R: Runtime>(app: &AppHandle<R>, hidden: bool) -> Result<(), Strin
     std::fs::write(&path, json).map_err(|e| format!("Failed to save setting: {}", e))
 }
 
-/// Hides the menu bar if it was hidden when the app last ran. Called from
-/// `setup`, once the menu is set and before the window is first drawn.
-pub fn restore<R: Runtime>(window: &WebviewWindow<R>) {
-    if !cfg!(target_os = "windows") {
-        return;
-    }
-    let hidden = prefs_path(window.app_handle())
+/// Called from `setup`, once the menu is set and before the window is first
+/// drawn: hides the menu bar if it was hidden when the app last ran, and adds
+/// the item to the webview's right-click menu.
+pub fn setup(window: &WebviewWindow) {
+    let hidden = prefs_path(window)
         .and_then(|path| std::fs::read_to_string(path).ok())
         .map(|json| parse_hidden(&json))
         .unwrap_or(false);
     if hidden {
         let _ = window.hide_menu();
     }
+
+    let target = window.clone();
+    let _ = window.with_webview(move |webview| {
+        // SAFETY: `with_webview` runs this on the UI thread, where WebView2's
+        // COM objects live.
+        if let Err(e) = unsafe { add_context_menu_item(&webview, target) } {
+            eprintln!("Menu bar item not added to the context menu: {:?}", e);
+        }
+    });
 }
 
 /// Hides the menu bar if it is shown, shows it if not, and remembers which.
-pub fn toggle<R: Runtime>(window: &WebviewWindow<R>) {
+fn toggle(window: &WebviewWindow) {
     let hide = window.is_menu_visible().unwrap_or(false);
     let result = if hide {
         window.hide_menu()
@@ -79,27 +91,70 @@ pub fn toggle<R: Runtime>(window: &WebviewWindow<R>) {
         window.show_menu()
     };
     if result.is_ok() {
-        let _ = save_hidden(window.app_handle(), hide);
+        let _ = save_hidden(window, hide);
     }
 }
 
-/// The toolbar's right-click menu: a single "Menu Bar" item, ticked while the
-/// bar is shown. Picking it goes through `toggle`.
-#[tauri::command]
-pub fn show_toolbar_context_menu(app: AppHandle) -> Result<(), String> {
-    if !cfg!(target_os = "windows") {
-        return Err("The menu bar can only be hidden on Windows".to_string());
-    }
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "main window not found".to_string())?;
-    let shown = window.is_menu_visible().map_err(|e| e.to_string())?;
+/// Appends a separator and the item to WebView2's menu each time it opens.
+/// Only on the page itself: a text field, selected text, an image or a video
+/// get their menu as it is.
+unsafe fn add_context_menu_item(
+    webview: &PlatformWebview,
+    window: WebviewWindow,
+) -> windows::core::Result<()> {
+    let core = webview
+        .controller()
+        .CoreWebView2()?
+        .cast::<ICoreWebView2_11>()?;
+    let environment = webview.environment().cast::<ICoreWebView2Environment9>()?;
 
-    let menu = Menu::new(&app).map_err(|e| e.to_string())?;
-    let item = CheckMenuItem::with_id(&app, TOGGLE_ID, "Menu Bar", true, shown, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    menu.append(&item).map_err(|e| e.to_string())?;
-    window.popup_menu(&menu).map_err(|e| e.to_string())
+    let handler = ContextMenuRequestedEventHandler::create(Box::new(move |_, args| unsafe {
+        let Some(args) = args else { return Ok(()) };
+
+        let target = args.ContextMenuTarget()?;
+        let mut kind = COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND::default();
+        target.Kind(&mut kind)?;
+        let mut editable = BOOL::default();
+        target.IsEditable(&mut editable)?;
+        if kind != COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND_PAGE || editable.as_bool() {
+            return Ok(());
+        }
+
+        let label = if window.is_menu_visible().unwrap_or(false) {
+            "Hide Menu Bar"
+        } else {
+            "Show Menu Bar"
+        };
+        let separator = environment.CreateContextMenuItem(
+            &HSTRING::new(),
+            None,
+            COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR,
+        )?;
+        let item = environment.CreateContextMenuItem(
+            &HSTRING::from(label),
+            None,
+            COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
+        )?;
+        let selected = window.clone();
+        let mut token = 0;
+        item.add_CustomItemSelected(
+            &CustomItemSelectedEventHandler::create(Box::new(move |_, _| {
+                toggle(&selected);
+                Ok(())
+            })),
+            &mut token,
+        )?;
+
+        let items = args.MenuItems()?;
+        let mut count = 0;
+        items.Count(&mut count)?;
+        items.InsertValueAtIndex(count, &separator)?;
+        items.InsertValueAtIndex(count + 1, &item)?;
+        Ok(())
+    }));
+
+    let mut token = 0;
+    core.add_ContextMenuRequested(&handler, &mut token)
 }
 
 #[cfg(test)]
