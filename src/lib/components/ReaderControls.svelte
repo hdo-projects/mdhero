@@ -57,6 +57,26 @@
     </div>
 
     <div class="rc-group">
+      <span class="rc-label">Long code lines</span>
+      <div class="rc-segmented">
+        <button
+          onclick={() => settings.update((s) => ({ ...s, wrapCodeBlocks: false }))}
+          class="rc-seg-btn"
+          class:active={!$settings.wrapCodeBlocks}
+        >
+          Scroll
+        </button>
+        <button
+          onclick={() => settings.update((s) => ({ ...s, wrapCodeBlocks: true }))}
+          class="rc-seg-btn"
+          class:active={$settings.wrapCodeBlocks}
+        >
+          Wrap
+        </button>
+      </div>
+    </div>
+
+    <div class="rc-group">
       <span class="rc-label">Width mode</span>
       <div class="rc-segmented">
         <button
