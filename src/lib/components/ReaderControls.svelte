@@ -64,6 +64,26 @@
     </div>
 
     <div class="rc-group">
+      <span class="rc-label">{$t('reader.longCodeLines')}</span>
+      <div class="rc-segmented">
+        <button
+          onclick={() => settings.update((s) => ({ ...s, wrapCodeBlocks: false }))}
+          class="rc-seg-btn"
+          class:active={!$settings.wrapCodeBlocks}
+        >
+          {$t('reader.codeScroll')}
+        </button>
+        <button
+          onclick={() => settings.update((s) => ({ ...s, wrapCodeBlocks: true }))}
+          class="rc-seg-btn"
+          class:active={$settings.wrapCodeBlocks}
+        >
+          {$t('reader.codeWrap')}
+        </button>
+      </div>
+    </div>
+
+    <div class="rc-group">
       <span class="rc-label">{$t('reader.widthMode')}</span>
       <div class="rc-segmented">
         <button

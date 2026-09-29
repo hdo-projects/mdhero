@@ -365,6 +365,7 @@
 <article
   bind:this={articleEl}
   class="md-content prose prose-slate page-dark:prose-invert max-w-none mx-auto px-8 py-8 transition-all"
+  class:wrap-code={$settings.wrapCodeBlocks}
   style="
     max-width: {getContentMaxWidth($settings)};
     font-size: {$settings.fontSize}px;
@@ -446,6 +447,13 @@
 
   :global(html.page-dark) article :global(pre) {
     border-color: #2c2c2e;
+  }
+
+  /* overflow-wrap breaks a URL or hash longer than the block, which would
+     otherwise still force a scrollbar. */
+  article.wrap-code :global(pre) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   article :global(code) {
