@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { get } from "svelte/store";
   import { PanelLeft, PanelTop } from "@lucide/svelte";
   import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
@@ -26,6 +27,7 @@
   let overIndex = $state(-1);
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
+  let contextMenuEl = $state<HTMLElement | null>(null);
   // Result of the last copy (or failed reveal), shown in place of the label of
   // the entry clicked.
   let copyFeedback = $state<{ item: "path" | "name" | "reveal"; text: string } | null>(null);
@@ -122,9 +124,10 @@
       && !tab.filePath.startsWith("new://");
   }
 
-  // Every document tab gets the menu, since any of them can be closed; the copy
-  // entries only show for tabs backed by a file.
-  function handleContextMenu(e: MouseEvent, tab: Tab) {
+  // Every document tab gets the menu, since any of them can be closed and the
+  // tabs can be moved from any of them; the copy entries only show for tabs
+  // backed by a file.
+  async function handleContextMenu(e: MouseEvent, tab: Tab) {
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const menuWidth = 160;
@@ -136,6 +139,12 @@
       : { x: Math.min(rect.left, maxX), y: rect.bottom + 4 };
     contextMenuTab = tab;
     copyFeedback = null;
+    // Beside a side tab near the bottom of the window, the menu would run past
+    // the bottom edge: lift it until it fits.
+    await tick();
+    if (!contextMenuEl) return;
+    const overflow = contextMenuEl.getBoundingClientRect().bottom - (window.innerHeight - 8);
+    if (overflow > 0) contextMenuPos = { ...contextMenuPos, y: Math.max(8, contextMenuPos.y - overflow) };
   }
 
   function closeContextMenu() {
@@ -180,6 +189,11 @@
     const id = contextMenuTab.id;
     closeContextMenu();
     onCloseTab(id);
+  }
+
+  function handleTogglePositionFromMenu() {
+    closeContextMenu();
+    toggleTabsPosition();
   }
 </script>
 
@@ -282,7 +296,7 @@
 {#if contextMenuTab}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
-  <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
+  <div bind:this={contextMenuEl} class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
     {#if isFileTab(contextMenuTab)}
       <button onclick={() => handleCopy("name")} class="dropdown-item">
         <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
@@ -297,6 +311,10 @@
     {/if}
     <button onclick={handleCloseFromMenu} class="dropdown-item">
       <span>Close Tab</span>
+    </button>
+    <div class="dropdown-separator"></div>
+    <button onclick={handleTogglePositionFromMenu} class="dropdown-item">
+      <span>{side ? "Show Tabs at the Top" : "Show Tabs on the Side"}</span>
     </button>
   </div>
 {/if}
