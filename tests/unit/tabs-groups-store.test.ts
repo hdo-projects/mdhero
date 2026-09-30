@@ -158,6 +158,21 @@ describe("tab groups in the tab store", () => {
   });
 });
 
+describe("dragging a whole group", () => {
+  it("moves the group's tabs as a block, and keeps them in their group", async () => {
+    const store = await freshStore();
+    const [a, b] = open(store, "a.md", "b.md", "x.md", "y.md");
+    const g = store.createGroup(a);
+    store.moveToGroup(b, g);
+
+    store.reorderGroup(g, 3); // aimed at y.md, moving right: after it
+    expect(order(store)).toEqual(["x.md", "y.md", "a.md", "b.md"]);
+    expect(groupOf(store, a)?.id).toBe(g);
+    expect(groupOf(store, b)?.id).toBe(g);
+    expect(session().paths).toEqual(["/docs/x.md", "/docs/y.md", "/docs/a.md", "/docs/b.md"]);
+  });
+});
+
 describe("tab groups in the saved session", () => {
   it("saves each group's look and files, and leaves the key out when there are none", async () => {
     const store = await freshStore();

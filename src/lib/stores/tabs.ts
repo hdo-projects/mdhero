@@ -5,6 +5,7 @@ import {
   isTabHidden,
   keepGroupsTogether,
   liveGroups,
+  moveGroup,
   moveTab,
   nearestShownTab,
   nextGroupColor,
@@ -290,6 +291,11 @@ function createTabStore() {
     tabs.update((ts) => moveTab(ts, fromIndex, toIndex));
   }
 
+  // A group dragged by its chip moves as a block (see `moveGroup`).
+  function reorderGroup(groupId: string, toIndex: number) {
+    tabs.update((ts) => moveGroup(ts, groupId, toIndex));
+  }
+
   /** The tabs not folded away in a group, in order: what Ctrl+Tab walks through. */
   function shownTabs(): Tab[] {
     const collapsed = collapsedGroupIds(get(groups));
@@ -424,6 +430,7 @@ function createTabStore() {
     updateTabContent,
     getActiveTab,
     reorderTabs,
+    reorderGroup,
     goHome,
     setEditing,
     updateEditContent,

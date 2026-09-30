@@ -75,6 +75,32 @@ export function moveTab<T extends Groupable>(tabs: T[], from: number, to: number
 }
 
 /**
+ * Drag and drop of a whole group (by its chip): moves all its tabs next to
+ * the tab at `to`, after it when moving right, before it when moving left,
+ * the same way a single tab lands. Aimed at a tab of another group, it goes
+ * past that whole group rather than into it.
+ */
+export function moveGroup<T extends Groupable>(tabs: T[], groupId: string, to: number): T[] {
+  const first = tabs.findIndex((t) => t.groupId === groupId);
+  const target = tabs[to];
+  if (first === -1 || !target || target.groupId === groupId) return tabs;
+  const members = tabs.filter((t) => t.groupId === groupId);
+  const movingRight = to > first;
+
+  let anchor = target;
+  if (target.groupId) {
+    const edge = movingRight
+      ? lastIndexWhere(tabs, (t) => t.groupId === target.groupId)
+      : tabs.findIndex((t) => t.groupId === target.groupId);
+    anchor = tabs[edge];
+  }
+  const rest = tabs.filter((t) => t.groupId !== groupId);
+  const at = rest.indexOf(anchor) + (movingRight ? 1 : 0);
+  rest.splice(at, 0, ...members);
+  return rest;
+}
+
+/**
  * Puts a tab in a group (`null` takes it out of its group). A tab joining a
  * group that has tabs lands after the last of them. Otherwise it stays where
  * it is, unless that is inside the group it leaves: then it moves just past
