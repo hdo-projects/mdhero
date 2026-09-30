@@ -90,8 +90,9 @@
       && !tab.filePath.startsWith("new://");
   }
 
+  // Every document tab gets the menu, since any of them can be closed; the copy
+  // entries only show for tabs backed by a file.
   function handleContextMenu(e: MouseEvent, tab: Tab) {
-    if (!isFileTab(tab)) return;
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const menuWidth = 160;
@@ -111,6 +112,13 @@
     const success = await copy(contextMenuTab.filePath);
     copyFeedback = { item, text: success ? "Copied!" : "Failed" };
     setTimeout(closeContextMenu, 900);
+  }
+
+  function handleCloseFromMenu() {
+    if (!contextMenuTab) return;
+    const id = contextMenuTab.id;
+    closeContextMenu();
+    onCloseTab(id);
   }
 </script>
 
@@ -174,11 +182,17 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
   <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
-    <button onclick={() => handleCopy("path")} class="dropdown-item">
-      <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
-    </button>
-    <button onclick={() => handleCopy("name")} class="dropdown-item">
-      <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
+    {#if isFileTab(contextMenuTab)}
+      <button onclick={() => handleCopy("path")} class="dropdown-item">
+        <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
+      </button>
+      <button onclick={() => handleCopy("name")} class="dropdown-item">
+        <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
+      </button>
+      <div class="dropdown-separator"></div>
+    {/if}
+    <button onclick={handleCloseFromMenu} class="dropdown-item">
+      <span>Close Tab</span>
     </button>
   </div>
 {/if}
@@ -398,6 +412,16 @@
   }
 
   :global(html.dark) .dropdown-item:hover {
+    background: #3a3a3c;
+  }
+
+  .dropdown-separator {
+    height: 1px;
+    margin: 4px 6px;
+    background: #e5e5e5;
+  }
+
+  :global(html.dark) .dropdown-separator {
     background: #3a3a3c;
   }
 
