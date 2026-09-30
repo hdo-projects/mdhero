@@ -77,7 +77,30 @@
     "copyPath": "Copier le chemin",
     "copyFileName": "Copier le nom du fichier",
     "showTabsSide": "Afficher les onglets sur le côté",
-    "showTabsTop": "Afficher les onglets en haut"
+    "showTabsTop": "Afficher les onglets en haut",
+    "addToNewGroup": "Ajouter l'onglet à un nouveau groupe",
+    "moveToNewGroup": "Déplacer vers un nouveau groupe",
+    "addToGroup": "Ajouter à {group}",
+    "moveToGroup": "Déplacer vers {group}",
+    "removeFromGroup": "Retirer du groupe",
+    "groupNamePlaceholder": "Nommer ce groupe",
+    "groupName": "Nom du groupe",
+    "groupColor": "Couleur du groupe",
+    "collapseGroup": "Réduire le groupe",
+    "expandGroup": "Développer le groupe",
+    "ungroup": "Dissocier le groupe",
+    "closeGroup": "Fermer le groupe",
+    "groupColors": {
+      "blue": "Bleu",
+      "red": "Rouge",
+      "yellow": "Jaune",
+      "green": "Vert",
+      "pink": "Rose",
+      "purple": "Violet",
+      "cyan": "Cyan",
+      "orange": "Orange",
+      "grey": "Gris"
+    }
   },
   "empty": {
     "description": "Un lecteur et éditeur Markdown natif.",
