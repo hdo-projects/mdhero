@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { get } from "svelte/store";
   import { PanelLeft, PanelTop } from "@lucide/svelte";
   import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
@@ -26,6 +27,7 @@
   let overIndex = $state(-1);
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
+  let contextMenuEl = $state<HTMLElement | null>(null);
   let copyFeedback = $state("");
 
   // Tabs in a row across the top, or in a resizable panel on the left.
@@ -120,8 +122,9 @@
       && !tab.filePath.startsWith("new://");
   }
 
-  function handleContextMenu(e: MouseEvent, tab: Tab) {
-    if (!isFileTab(tab)) return;
+  // Every document tab gets the menu, since the tabs can be moved from any of
+  // them; Copy Path only shows for tabs backed by a file.
+  async function handleContextMenu(e: MouseEvent, tab: Tab) {
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const menuWidth = 160;
@@ -133,6 +136,12 @@
       : { x: Math.min(rect.left, maxX), y: rect.bottom + 4 };
     contextMenuTab = tab;
     copyFeedback = "";
+    // Beside a side tab near the bottom of the window, the menu would run past
+    // the bottom edge: lift it until it fits.
+    await tick();
+    if (!contextMenuEl) return;
+    const overflow = contextMenuEl.getBoundingClientRect().bottom - (window.innerHeight - 8);
+    if (overflow > 0) contextMenuPos = { ...contextMenuPos, y: Math.max(8, contextMenuPos.y - overflow) };
   }
 
   function closeContextMenu() {
@@ -145,6 +154,11 @@
     const success = await copyPath(contextMenuTab.filePath);
     copyFeedback = success ? "Copied!" : "Failed";
     setTimeout(closeContextMenu, 900);
+  }
+
+  function handleTogglePositionFromMenu() {
+    closeContextMenu();
+    toggleTabsPosition();
   }
 </script>
 
@@ -245,9 +259,15 @@
 {#if contextMenuTab}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
-  <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
-    <button onclick={handleCopyPath} class="dropdown-item">
-      <span>{copyFeedback || "Copy Path"}</span>
+  <div bind:this={contextMenuEl} class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
+    {#if isFileTab(contextMenuTab)}
+      <button onclick={handleCopyPath} class="dropdown-item">
+        <span>{copyFeedback || "Copy Path"}</span>
+      </button>
+      <div class="dropdown-separator"></div>
+    {/if}
+    <button onclick={handleTogglePositionFromMenu} class="dropdown-item">
+      <span>{side ? "Show Tabs at the Top" : "Show Tabs on the Side"}</span>
     </button>
   </div>
 {/if}
@@ -584,6 +604,16 @@
   }
 
   :global(html.dark) .dropdown-item:hover {
+    background: #3a3a3c;
+  }
+
+  .dropdown-separator {
+    height: 1px;
+    margin: 4px 6px;
+    background: #e5e5e5;
+  }
+
+  :global(html.dark) .dropdown-separator {
     background: #3a3a3c;
   }
 
