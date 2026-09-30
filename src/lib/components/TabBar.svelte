@@ -12,7 +12,7 @@
   } from "$lib/stores/settings";
   import { tocVisible, tocEntries } from "$lib/stores/toc";
   import { newDocument } from "$lib/tauri/files";
-  import { copyPath } from "$lib/utils/clipboard";
+  import { copyFileName, copyPath } from "$lib/utils/clipboard";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import PanelResizer from "./PanelResizer.svelte";
 
@@ -28,7 +28,8 @@
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
   let contextMenuEl = $state<HTMLElement | null>(null);
-  let copyFeedback = $state("");
+  // Result of the last copy, shown in place of the label of the entry clicked.
+  let copyFeedback = $state<{ item: "path" | "name"; text: string } | null>(null);
 
   // Tabs in a row across the top, or in a resizable panel on the left.
   let side = $derived($settings.tabsPosition === "side");
@@ -122,8 +123,9 @@
       && !tab.filePath.startsWith("new://");
   }
 
-  // Every document tab gets the menu, since the tabs can be moved from any of
-  // them; Copy Path only shows for tabs backed by a file.
+  // Every document tab gets the menu, since any of them can be closed and the
+  // tabs can be moved from any of them; the copy entries only show for tabs
+  // backed by a file.
   async function handleContextMenu(e: MouseEvent, tab: Tab) {
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -135,25 +137,51 @@
       ? { x: Math.min(rect.right + 4, maxX), y: rect.top }
       : { x: Math.min(rect.left, maxX), y: rect.bottom + 4 };
     contextMenuTab = tab;
-    copyFeedback = "";
+    copyFeedback = null;
     // Beside a side tab near the bottom of the window, the menu would run past
-    // the bottom edge: lift it until it fits.
+    // the bottom edge, and a translated menu wider than 160px can run past the
+    // right edge: move it back inside.
     await tick();
     if (!contextMenuEl) return;
-    const overflow = contextMenuEl.getBoundingClientRect().bottom - (window.innerHeight - 8);
-    if (overflow > 0) contextMenuPos = { ...contextMenuPos, y: Math.max(8, contextMenuPos.y - overflow) };
+    const box = contextMenuEl.getBoundingClientRect();
+    const overflowX = box.right - (window.innerWidth - 8);
+    const overflowY = box.bottom - (window.innerHeight - 8);
+    if (overflowX > 0 || overflowY > 0) {
+      contextMenuPos = {
+        x: Math.max(8, contextMenuPos.x - Math.max(0, overflowX)),
+        y: Math.max(8, contextMenuPos.y - Math.max(0, overflowY)),
+      };
+    }
   }
 
   function closeContextMenu() {
     contextMenuTab = null;
-    copyFeedback = "";
+    copyFeedback = null;
   }
 
-  async function handleCopyPath() {
+  async function handleCopy(item: "path" | "name") {
     if (!contextMenuTab) return;
-    const success = await copyPath(contextMenuTab.filePath);
-    copyFeedback = success ? "Copied!" : "Failed";
+    const copy = item === "path" ? copyPath : copyFileName;
+    const success = await copy(contextMenuTab.filePath);
+    copyFeedback = { item, text: success ? "Copied!" : "Failed" };
     setTimeout(closeContextMenu, 900);
+  }
+
+  // Escape dismisses the menu and nothing else. The page's own Escape handler
+  // listens on window too, but in the bubble phase, so without this it would
+  // also close the active tab (close-on-Escape setting).
+  function handleMenuKeydown(e: KeyboardEvent) {
+    if (e.key !== "Escape" || !contextMenuTab) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeContextMenu();
+  }
+
+  function handleCloseFromMenu() {
+    if (!contextMenuTab) return;
+    const id = contextMenuTab.id;
+    closeContextMenu();
+    onCloseTab(id);
   }
 
   function handleTogglePositionFromMenu() {
@@ -165,6 +193,8 @@
 {#snippet tabName(tab: Tab)}
   {#if tab.diskChanged}<span class="tab-disk" title="Changed on disk while you were editing">⟳</span>{:else if tab.dirty}<span class="tab-dirty" title="Unsaved changes">•</span>{/if}{tab.fileName}
 {/snippet}
+
+<svelte:window onkeydowncapture={handleMenuKeydown} />
 
 <div class="tabbar" class:side>
   <div class="tabbar-inner">
@@ -261,11 +291,18 @@
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
   <div bind:this={contextMenuEl} class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
     {#if isFileTab(contextMenuTab)}
-      <button onclick={handleCopyPath} class="dropdown-item">
-        <span>{copyFeedback || "Copy Path"}</span>
+      <button onclick={() => handleCopy("path")} class="dropdown-item">
+        <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
+      </button>
+      <button onclick={() => handleCopy("name")} class="dropdown-item">
+        <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
       </button>
       <div class="dropdown-separator"></div>
     {/if}
+    <button onclick={handleCloseFromMenu} class="dropdown-item">
+      <span>Close Tab</span>
+    </button>
+    <div class="dropdown-separator"></div>
     <button onclick={handleTogglePositionFromMenu} class="dropdown-item">
       <span>{side ? "Show Tabs at the Top" : "Show Tabs on the Side"}</span>
     </button>
@@ -565,7 +602,9 @@
 
   .dropdown {
     position: fixed;
-    width: 160px;
+    /* As wide as the longest entry, so translated labels stay on one line. */
+    min-width: 160px;
+    width: max-content;
     background: white;
     border: 1px solid #e5e5e5;
     border-radius: 8px;
