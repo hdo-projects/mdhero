@@ -140,11 +140,19 @@
     contextMenuTab = tab;
     copyFeedback = null;
     // Beside a side tab near the bottom of the window, the menu would run past
-    // the bottom edge: lift it until it fits.
+    // the bottom edge, and a translated menu wider than 160px can run past the
+    // right edge: move it back inside.
     await tick();
     if (!contextMenuEl) return;
-    const overflow = contextMenuEl.getBoundingClientRect().bottom - (window.innerHeight - 8);
-    if (overflow > 0) contextMenuPos = { ...contextMenuPos, y: Math.max(8, contextMenuPos.y - overflow) };
+    const box = contextMenuEl.getBoundingClientRect();
+    const overflowX = box.right - (window.innerWidth - 8);
+    const overflowY = box.bottom - (window.innerHeight - 8);
+    if (overflowX > 0 || overflowY > 0) {
+      contextMenuPos = {
+        x: Math.max(8, contextMenuPos.x - Math.max(0, overflowX)),
+        y: Math.max(8, contextMenuPos.y - Math.max(0, overflowY)),
+      };
+    }
   }
 
   function closeContextMenu() {
@@ -595,7 +603,9 @@
 
   .dropdown {
     position: fixed;
-    width: 160px;
+    /* As wide as the longest entry, so translated labels stay on one line. */
+    min-width: 160px;
+    width: max-content;
     background: white;
     border: 1px solid #e5e5e5;
     border-radius: 8px;
