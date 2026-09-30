@@ -4,6 +4,7 @@ import {
   groupLabel,
   keepGroupsTogether,
   liveGroups,
+  moveGroup,
   moveTab,
   nearestShownTab,
   nextGroupColor,
@@ -69,6 +70,29 @@ describe("moveTab (drag and drop)", () => {
     const list = tabs("a:G b");
     expect(moveTab(list, 1, 1)).toBe(list);
     expect(moveTab(list, 0, 5)).toBe(list);
+  });
+});
+
+describe("moveGroup (dragging a group by its chip)", () => {
+  it("lands after a loose tab when moving right, before it when moving left", () => {
+    expect(spec(moveGroup(tabs("a:G b:G x y"), "G", 3))).toBe("x y a:G b:G");
+    expect(spec(moveGroup(tabs("a:G b:G x y"), "G", 2))).toBe("x a:G b:G y");
+    expect(spec(moveGroup(tabs("x y a:G b:G"), "G", 0))).toBe("a:G b:G x y");
+    expect(spec(moveGroup(tabs("x y a:G b:G"), "G", 1))).toBe("x a:G b:G y");
+  });
+
+  it("goes past a whole other group, never into it", () => {
+    // Aimed at the first tab of H while moving right: after all of H.
+    expect(spec(moveGroup(tabs("a:G c:H d:H y"), "G", 1))).toBe("c:H d:H a:G y");
+    // Aimed at the last tab of H while moving left: before all of H.
+    expect(spec(moveGroup(tabs("x c:H d:H a:G"), "G", 2))).toBe("x a:G c:H d:H");
+  });
+
+  it("does nothing when aimed at itself, out of range, or for a group with no tabs", () => {
+    const list = tabs("a:G b:G x");
+    expect(moveGroup(list, "G", 1)).toBe(list);
+    expect(moveGroup(list, "G", 9)).toBe(list);
+    expect(moveGroup(list, "Z", 2)).toBe(list);
   });
 });
 

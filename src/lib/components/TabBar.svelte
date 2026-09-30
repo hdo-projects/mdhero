@@ -132,6 +132,79 @@
     window.addEventListener("mouseup", handleMouseUp);
   }
 
+  // A group dragged by its chip (its header on the side) moves as a block.
+  // It aims at a loose tab, and lands next to it as a dragged tab would, or
+  // at another group, and lands past all of it. `index` is the tab passed to
+  // `reorderGroup`; `after` puts the drop mark on the side it will land.
+  type GroupDrop = { tab: number; index: number; after: boolean } | { group: string; index: number; after: boolean };
+  let draggedGroupId = $state<string | null>(null);
+  let groupDrop = $state<GroupDrop | null>(null);
+  // Set for the click that ends a drag, so that it does not fold the group.
+  let swallowChipClick = false;
+
+  function groupDropAt(ev: MouseEvent, groupId: string): GroupDrop | null {
+    const items = document.querySelectorAll<HTMLElement>(
+      ".tabbar-files .tab[data-index], .tabbar-files .group-chip[data-group-chip]"
+    );
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const inside = side
+        ? ev.clientY >= rect.top && ev.clientY < rect.bottom
+        : ev.clientX >= rect.left && ev.clientX < rect.right;
+      if (!inside) continue;
+      const tabIndex = Number(item.dataset.index);
+      const targetGroup = item.dataset.groupChip ?? $tabs[tabIndex]?.groupId ?? null;
+      if (targetGroup === groupId) return null;
+      const index = targetGroup ? $tabs.findIndex((t) => t.groupId === targetGroup) : tabIndex;
+      const after = index > $tabs.findIndex((t) => t.groupId === groupId);
+      return targetGroup ? { group: targetGroup, index, after } : { tab: tabIndex, index, after };
+    }
+    // Between two items: keep aiming where the pointer last was.
+    return groupDrop;
+  }
+
+  function handleGroupMouseDown(e: MouseEvent, groupId: string) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const start = { x: e.clientX, y: e.clientY };
+
+    function handleMouseMove(ev: MouseEvent) {
+      // A few pixels of slack, so that a slightly shaky click still folds.
+      if (!draggedGroupId && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+      draggedGroupId = groupId;
+      groupDrop = groupDropAt(ev, groupId);
+    }
+
+    function handleMouseUp() {
+      if (draggedGroupId && groupDrop) tabStore.reorderGroup(groupId, groupDrop.index);
+      swallowChipClick = !!draggedGroupId;
+      setTimeout(() => (swallowChipClick = false));
+      draggedGroupId = null;
+      groupDrop = null;
+      (window as any).__mdhero_tab_dragging = false;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    }
+
+    (window as any).__mdhero_tab_dragging = true;
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function handleGroupChipClick(groupId: string) {
+    if (swallowChipClick) return;
+    tabStore.toggleGroup(groupId);
+  }
+
+  /** Which side of this tab or group the dragged group would land on, if it is the target. */
+  function dropSide(target: { tab: number } | { group: string }): "before" | "after" | null {
+    if (!groupDrop) return null;
+    const hit = "tab" in target
+      ? "tab" in groupDrop && groupDrop.tab === target.tab
+      : "group" in groupDrop && groupDrop.group === target.group;
+    return hit ? (groupDrop.after ? "after" : "before") : null;
+  }
+
   function handleNewTab() {
     newDocument();
   }
@@ -306,6 +379,8 @@
     class="tab"
     class:active={$activeTabId === tab.id}
     class:drag-over={overIndex === idx && dragIndex !== idx && dragIndex >= 0}
+    class:drop-before={dropSide({ tab: idx }) === "before"}
+    class:drop-after={dropSide({ tab: idx }) === "after"}
     title={side && isFileTab(tab) ? stripVerbatimPrefix(tab.filePath) : undefined}
   >
     {#if side && withFolder.has(tab.id)}
@@ -356,9 +431,13 @@
           <div
             class="tab-group"
             class:collapsed={group.collapsed}
+            class:dragging={draggedGroupId === group.id}
+            class:drop-before={dropSide({ group: group.id }) === "before"}
+            class:drop-after={dropSide({ group: group.id }) === "after"}
             style="--group-color: var(--tab-group-{group.color})"
           >
-            <!-- Click folds or unfolds the group; right-click edits it. -->
+            <!-- Click folds or unfolds the group, dragging moves it, right-click
+                 edits it. -->
             <div
               class="group-chip"
               data-group-chip={group.id}
@@ -366,7 +445,8 @@
               tabindex="0"
               aria-expanded={!group.collapsed}
               title={groupLabel(group, $tabs)}
-              onclick={() => tabStore.toggleGroup(group.id)}
+              onmousedown={(e) => handleGroupMouseDown(e, group.id)}
+              onclick={() => handleGroupChipClick(group.id)}
               onkeydown={(e) => handleGroupChipKeydown(e, group.id)}
               oncontextmenu={(e) => handleGroupContextMenu(e, group.id)}
             >
@@ -859,6 +939,63 @@
 
   .tab-group.collapsed::after {
     display: none;
+  }
+
+  /* A group dragged by its chip fades, and a mark shows where it will land:
+     before or after the tab or group it is aimed at. */
+  .tab-group.dragging {
+    opacity: 0.5;
+  }
+
+  .tab.drop-before::before,
+  .tab.drop-after::before,
+  .tab-group.drop-before::before,
+  .tab-group.drop-after::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    border-radius: 1px;
+    background: #0891B2;
+    pointer-events: none;
+  }
+
+  :global(html.dark) .tab.drop-before::before,
+  :global(html.dark) .tab.drop-after::before,
+  :global(html.dark) .tab-group.drop-before::before,
+  :global(html.dark) .tab-group.drop-after::before {
+    background: #22D3EE;
+  }
+
+  .tab.drop-before::before,
+  .tab-group.drop-before::before {
+    left: -2px;
+  }
+
+  .tab.drop-after::before,
+  .tab-group.drop-after::before {
+    right: -2px;
+  }
+
+  .tabbar.side .tab.drop-before::before,
+  .tabbar.side .tab-group.drop-before::before {
+    top: -2px;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 2px;
+  }
+
+  .tabbar.side .tab.drop-after::before,
+  .tabbar.side .tab-group.drop-after::before {
+    top: auto;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 2px;
   }
 
   .group-chip {
