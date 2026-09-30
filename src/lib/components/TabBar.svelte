@@ -114,6 +114,16 @@
     setTimeout(closeContextMenu, 900);
   }
 
+  // Escape dismisses the menu and nothing else. The page's own Escape handler
+  // listens on window too, but in the bubble phase, so without this it would
+  // also close the active tab (close-on-Escape setting).
+  function handleMenuKeydown(e: KeyboardEvent) {
+    if (e.key !== "Escape" || !contextMenuTab) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeContextMenu();
+  }
+
   function handleCloseFromMenu() {
     if (!contextMenuTab) return;
     const id = contextMenuTab.id;
@@ -121,6 +131,8 @@
     onCloseTab(id);
   }
 </script>
+
+<svelte:window onkeydowncapture={handleMenuKeydown} />
 
 <div class="tabbar">
   <div class="tabbar-inner">
