@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
   import { newDocument } from "$lib/tauri/files";
-  import { copyPath } from "$lib/utils/clipboard";
+  import { copyFileName, copyPath } from "$lib/utils/clipboard";
 
   let {
     onCloseTab = (id: string) => tabStore.closeTab(id),
@@ -14,7 +14,8 @@
   let overIndex = $state(-1);
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
-  let copyFeedback = $state("");
+  // Result of the last copy, shown in place of the label of the entry clicked.
+  let copyFeedback = $state<{ item: "path" | "name"; text: string } | null>(null);
 
   function handleClose(e: MouseEvent, id: string) {
     e.stopPropagation();
@@ -96,18 +97,19 @@
     const menuWidth = 160;
     contextMenuPos = { x: Math.min(rect.left, window.innerWidth - menuWidth - 8), y: rect.bottom + 4 };
     contextMenuTab = tab;
-    copyFeedback = "";
+    copyFeedback = null;
   }
 
   function closeContextMenu() {
     contextMenuTab = null;
-    copyFeedback = "";
+    copyFeedback = null;
   }
 
-  async function handleCopyPath() {
+  async function handleCopy(item: "path" | "name") {
     if (!contextMenuTab) return;
-    const success = await copyPath(contextMenuTab.filePath);
-    copyFeedback = success ? "Copied!" : "Failed";
+    const copy = item === "path" ? copyPath : copyFileName;
+    const success = await copy(contextMenuTab.filePath);
+    copyFeedback = { item, text: success ? "Copied!" : "Failed" };
     setTimeout(closeContextMenu, 900);
   }
 </script>
@@ -172,8 +174,11 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
   <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
-    <button onclick={handleCopyPath} class="dropdown-item">
-      <span>{copyFeedback || "Copy Path"}</span>
+    <button onclick={() => handleCopy("path")} class="dropdown-item">
+      <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
+    </button>
+    <button onclick={() => handleCopy("name")} class="dropdown-item">
+      <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
     </button>
   </div>
 {/if}
