@@ -73,7 +73,10 @@
     "unsaved": "未保存的更改",
     "diskChanged": "在您编辑期间已在磁盘上被修改",
     "newTab": "新建标签页",
-    "copyPath": "复制路径"
+    "copyPath": "复制路径",
+    "copyFileName": "复制文件名",
+    "showTabsSide": "在侧边显示标签页",
+    "showTabsTop": "在顶部显示标签页"
   },
   "empty": {
     "description": "一款原生的 Markdown 阅读器与编辑器。",

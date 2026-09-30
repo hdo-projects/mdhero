@@ -74,7 +74,10 @@
     "unsaved": "Unsaved changes",
     "diskChanged": "Changed on disk while you were editing",
     "newTab": "New tab",
-    "copyPath": "Copy Path"
+    "copyPath": "Copy Path",
+    "copyFileName": "Copy File Name",
+    "showTabsSide": "Show Tabs on the Side",
+    "showTabsTop": "Show Tabs at the Top"
   },
   "empty": {
     "description": "A native Markdown reader and editor.",

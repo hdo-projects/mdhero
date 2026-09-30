@@ -74,7 +74,10 @@
     "unsaved": "Cambios sin guardar",
     "diskChanged": "Modificado en el disco mientras lo editabas",
     "newTab": "Nueva pestaña",
-    "copyPath": "Copiar ruta"
+    "copyPath": "Copiar ruta",
+    "copyFileName": "Copiar nombre del archivo",
+    "showTabsSide": "Mostrar pestañas al lado",
+    "showTabsTop": "Mostrar pestañas arriba"
   },
   "empty": {
     "description": "Un lector y editor de Markdown nativo.",

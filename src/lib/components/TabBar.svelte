@@ -12,7 +12,7 @@
   } from "$lib/stores/settings";
   import { tocVisible, tocEntries } from "$lib/stores/toc";
   import { newDocument } from "$lib/tauri/files";
-  import { copyPath } from "$lib/utils/clipboard";
+  import { copyFileName, copyPath } from "$lib/utils/clipboard";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import PanelResizer from "./PanelResizer.svelte";
   import { translate, t } from "$lib/i18n";
@@ -29,7 +29,8 @@
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
   let contextMenuEl = $state<HTMLElement | null>(null);
-  let copyFeedback = $state("");
+  // Result of the last copy, shown in place of the label of the entry clicked.
+  let copyFeedback = $state<{ item: "path" | "name"; text: string } | null>(null);
 
   // Tabs in a row across the top, or in a resizable panel on the left.
   let side = $derived($settings.tabsPosition === "side");
@@ -123,8 +124,9 @@
       && !tab.filePath.startsWith("new://");
   }
 
-  // Every document tab gets the menu, since the tabs can be moved from any of
-  // them; Copy Path only shows for tabs backed by a file.
+  // Every document tab gets the menu, since any of them can be closed and the
+  // tabs can be moved from any of them; the copy entries only show for tabs
+  // backed by a file.
   async function handleContextMenu(e: MouseEvent, tab: Tab) {
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -136,7 +138,7 @@
       ? { x: Math.min(rect.right + 4, maxX), y: rect.top }
       : { x: Math.min(rect.left, maxX), y: rect.bottom + 4 };
     contextMenuTab = tab;
-    copyFeedback = "";
+    copyFeedback = null;
     // Beside a side tab near the bottom of the window, the menu would run past
     // the bottom edge: lift it until it fits.
     await tick();
@@ -147,14 +149,22 @@
 
   function closeContextMenu() {
     contextMenuTab = null;
-    copyFeedback = "";
+    copyFeedback = null;
   }
 
-  async function handleCopyPath() {
+  async function handleCopy(item: "path" | "name") {
     if (!contextMenuTab) return;
-    const success = await copyPath(contextMenuTab.filePath);
-    copyFeedback = success ? translate("common.copied") : translate("common.copyFailed");
+    const copy = item === "path" ? copyPath : copyFileName;
+    const success = await copy(contextMenuTab.filePath);
+    copyFeedback = { item, text: success ? translate("common.copied") : translate("common.copyFailed") };
     setTimeout(closeContextMenu, 900);
+  }
+
+  function handleCloseFromMenu() {
+    if (!contextMenuTab) return;
+    const id = contextMenuTab.id;
+    closeContextMenu();
+    onCloseTab(id);
   }
 
   function handleTogglePositionFromMenu() {
@@ -262,13 +272,20 @@
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
   <div bind:this={contextMenuEl} class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
     {#if isFileTab(contextMenuTab)}
-      <button onclick={handleCopyPath} class="dropdown-item">
-        <span>{copyFeedback || $t('tabbar.copyPath')}</span>
+      <button onclick={() => handleCopy("path")} class="dropdown-item">
+        <span>{copyFeedback?.item === "path" ? copyFeedback.text : $t('tabbar.copyPath')}</span>
+      </button>
+      <button onclick={() => handleCopy("name")} class="dropdown-item">
+        <span>{copyFeedback?.item === "name" ? copyFeedback.text : $t('tabbar.copyFileName')}</span>
       </button>
       <div class="dropdown-separator"></div>
     {/if}
+    <button onclick={handleCloseFromMenu} class="dropdown-item">
+      <span>{$t('menu.closeTab')}</span>
+    </button>
+    <div class="dropdown-separator"></div>
     <button onclick={handleTogglePositionFromMenu} class="dropdown-item">
-      <span>{side ? "Show Tabs at the Top" : "Show Tabs on the Side"}</span>
+      <span>{side ? $t('tabbar.showTabsTop') : $t('tabbar.showTabsSide')}</span>
     </button>
   </div>
 {/if}
