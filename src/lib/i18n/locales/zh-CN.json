@@ -37,7 +37,7 @@
     "readerTitleNoFile": "阅读偏好（请先打开文件）",
     "widthTitleNoFile": "切换宽屏模式（请先打开文件）",
     "useComfortable": "使用舒适宽度",
-    "useWide": "使用宽视口",
+    "useWide": "使用宽屏视图",
     "rawTitleNoFile": "查看 Markdown 源码（请先打开文件）",
     "rawTitleEditing": "查看 Markdown 源码（退出编辑模式后可用）",
     "rawTitle": "查看 Markdown 源码 ({mod}+U)",
