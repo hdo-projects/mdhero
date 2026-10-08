@@ -141,6 +141,46 @@ Before submitting a PR:
 
 If you find a security issue, please email **vaibhavuk.dev@gmail.com** instead of opening a public issue.
 
+### Invariants — please don't undo these
+
+MDHero opens `.md` files of unknown provenance: downloads, email attachments,
+shared repos, `mdhero://` links. **A markdown document is untrusted input.** The
+controls below were added in response to a real disclosure, and each one is easy
+to remove by accident while doing something otherwise reasonable.
+
+Each has a test behind it, so CI will stop you. But a test can only tell you
+*that* you broke something — this table is the *why*.
+
+| Please don't | Why | Caught by |
+|---|---|---|
+| Change Mermaid's `securityLevel: "strict"` | `"loose"` lets diagram source bind JavaScript and URLs to `click` nodes | `quicklook-bundle.test.ts` |
+| Remove `DOMPurify.sanitize()` before the SVG reaches `innerHTML` | Mermaid's output is derived from the document; this is the only sanitizer on that path | `quicklook-bundle.test.ts` |
+| Add `FORBID_TAGS: ["foreignObject"]` | Looks like obvious hardening. **Empties every diagram's labels** | re-render the diagrams and you'll see it |
+| Unpin DOMPurify from `~3.3.3` | 3.4 strips HTML inside `<foreignObject>`; `journey` diagrams break first | `dompurify-pin.test.ts` |
+| Set `security.csp` back to `null`, or wildcard `connect-src` | It *was* `null` once. `script-src 'self'` is what stops an injected script executing | `quicklook-bundle.test.ts` |
+| Remove `has_allowed_extension` in `commands.rs`, or widen `ALLOWED_TEXT_EXTENSIONS` | These commands are callable from any JS in the webview — the guard is what stops them being an arbitrary file read/write | `fs_scope_tests` |
+| Widen `assetProtocol.scope.allow` beyond the document's tree | `allow_assets` is the only route in, deliberately | `partition_assets` tests |
+| Add an extension to `opener:allow-open-path` | Widens what any JS can hand to the OS. Executable, archive and document-macro types were excluded on purpose | `opener-capability.test.ts` |
+
+**The Quick Look extension (`quicklook/`) is a second *host* for the renderer,
+not a second renderer.** It reuses `renderer/pipeline.ts` verbatim and must keep
+doing so. Its CSP is baked into the generated `preview.html`, because Tauri's
+header-based policy does not exist inside an `.appex`. Remote images deliberately
+do not load there — a decision, not a gap.
+
+Two traps worth knowing before you test:
+
+- **`pnpm tauri dev` applies no CSP at all.** Tauri serves it as a header from
+  the embedded-asset protocol, so a broken policy passes cleanly in dev. Test CSP
+  changes with `pnpm tauri build --debug --no-bundle`.
+- **A green suite is not evidence for a sanitizer change.** Render an actual
+  payload and assert nothing executed, and re-render every Mermaid diagram type —
+  each is a separate render path.
+
+If one of these blocks something you need, say so in the issue or PR. They are
+deliberate, not sacred — they just get changed on purpose, with evidence, rather
+than as a side effect.
+
 ---
 
 ## License
