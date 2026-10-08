@@ -65,7 +65,7 @@
     label="Resize table of contents"
     left="calc(var(--tabs-w, 0px) + var(--toc-w, 240px) - 11px)"
     top="calc(var(--chrome-top, 88px) + 8px)"
-    bottom="8px"
+    bottom="calc(var(--status-h, 0px) + 8px)"
     zIndex={14}
     onCommit={(width) => settings.update((s) => ({ ...s, tocWidth: width }))}
   />
@@ -73,12 +73,13 @@
 
 <style>
   /* A card inset 8px on every side of its `--toc-w` column, so it never sits
-     flush against the side tabs panel and the document keeps its padding. */
+     flush against the side tabs panel and the document keeps its padding. It
+     ends 8px above the status bar (`--status-h`, published by StatusBar). */
   .toc-sidebar {
     position: fixed;
     left: calc(var(--tabs-w, 0px) + 8px);
     top: calc(var(--chrome-top, 88px) + 8px);
-    bottom: 8px;
+    bottom: calc(var(--status-h, 0px) + 8px);
     width: calc(var(--toc-w, 240px) - 16px);
     background: #fafafa;
     border: 1px solid #e5e5e5;
