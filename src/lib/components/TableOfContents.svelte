@@ -63,31 +63,35 @@
     cssVar="--toc-w"
     resizingClass="toc-resizing"
     label="Resize table of contents"
-    left="calc(var(--tabs-w, 0px) + var(--toc-w, 240px) - 3px)"
-    top="calc(var(--chrome-top, 75px) + 5px)"
+    left="calc(var(--tabs-w, 0px) + var(--toc-w, 240px) - 11px)"
+    top="calc(var(--chrome-top, 75px) + 8px)"
+    bottom="8px"
     zIndex={14}
     onCommit={(width) => settings.update((s) => ({ ...s, tocWidth: width }))}
   />
 {/if}
 
 <style>
+  /* A card inset 8px on every side of its `--toc-w` column, so it never sits
+     flush against the side tabs panel and the document keeps its padding. */
   .toc-sidebar {
     position: fixed;
-    left: var(--tabs-w, 0px);
-    top: calc(var(--chrome-top, 75px) + 5px);
-    bottom: 0;
-    width: var(--toc-w, 240px);
+    left: calc(var(--tabs-w, 0px) + 8px);
+    top: calc(var(--chrome-top, 75px) + 8px);
+    bottom: 8px;
+    width: calc(var(--toc-w, 240px) - 16px);
     background: #fafafa;
-    border-right: 1px solid #e5e5e5;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
     overflow-y: auto;
     z-index: 14;
   }
 
   :global(html.dark) .toc-sidebar {
     background: #1c1c1e;
-    border-right-color: #2c2c2e;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+    border-color: #2c2c2e;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
   }
 
   .toc-header {
