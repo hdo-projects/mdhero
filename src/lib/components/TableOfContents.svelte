@@ -64,7 +64,7 @@
     resizingClass="toc-resizing"
     label="Resize table of contents"
     left="calc(var(--tabs-w, 0px) + var(--toc-w, 240px) - 11px)"
-    top="calc(var(--chrome-top, 75px) + 8px)"
+    top="calc(var(--chrome-top, 88px) + 8px)"
     bottom="8px"
     zIndex={14}
     onCommit={(width) => settings.update((s) => ({ ...s, tocWidth: width }))}
@@ -77,7 +77,7 @@
   .toc-sidebar {
     position: fixed;
     left: calc(var(--tabs-w, 0px) + 8px);
-    top: calc(var(--chrome-top, 75px) + 8px);
+    top: calc(var(--chrome-top, 88px) + 8px);
     bottom: 8px;
     width: calc(var(--toc-w, 240px) - 16px);
     background: #fafafa;

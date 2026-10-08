@@ -196,7 +196,7 @@
        the side tabs panel when there is one (`--tabs-w`), and fills the
        remaining viewport. This guarantees a single scrollbar (the textarea's). */
     position: fixed;
-    top: var(--chrome-top, 75px);
+    top: var(--chrome-top, 88px);
     left: var(--tabs-w, 0px);
     right: 0;
     bottom: 0;
