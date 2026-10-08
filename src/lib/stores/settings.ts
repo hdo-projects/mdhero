@@ -68,6 +68,11 @@ function loadSettings(): ReaderSettings {
         maxWidth: clamp(storedMaxWidth, MIN_MAX_WIDTH, MAX_MAX_WIDTH),
         widthMode: parsed.widthMode === "wide" ? "wide" : "comfortable",
         tocWidth: clampTocWidth(parsed.tocWidth),
+        // Read as-is, a hand-edited "false" is truthy and would leave it on.
+        syntaxHighlighting:
+          typeof parsed.syntaxHighlighting === "boolean"
+            ? parsed.syntaxHighlighting
+            : defaults.syntaxHighlighting,
       };
     }
   } catch {}
