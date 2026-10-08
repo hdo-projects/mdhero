@@ -72,6 +72,13 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/** A stored on/off setting, or its default when what was stored is not a
+ *  boolean. Read as-is, a hand-edited `"false"` is truthy and turns on what it
+ *  meant to turn off, and a `null` turns off a setting that defaults to on. */
+function storedBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function loadSettings(): ReaderSettings {
   const defaults: ReaderSettings = {
     fontSize: DEFAULT_FONT_SIZE,
@@ -111,6 +118,11 @@ function loadSettings(): ReaderSettings {
           typeof parsed.syntaxHighlighting === "boolean"
             ? parsed.syntaxHighlighting
             : defaults.syntaxHighlighting,
+        closeOnEscape: storedBoolean(parsed.closeOnEscape, defaults.closeOnEscape),
+        showLineNumbers: storedBoolean(parsed.showLineNumbers, defaults.showLineNumbers),
+        autoPresentMarp: storedBoolean(parsed.autoPresentMarp, defaults.autoPresentMarp),
+        restoreTabsOnLaunch: storedBoolean(parsed.restoreTabsOnLaunch, defaults.restoreTabsOnLaunch),
+        wrapCodeBlocks: storedBoolean(parsed.wrapCodeBlocks, defaults.wrapCodeBlocks),
       };
     }
   } catch {}
