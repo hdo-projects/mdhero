@@ -64,21 +64,21 @@
     </div>
 
     <div class="rc-group">
-      <span class="rc-label">Long code lines</span>
+      <span class="rc-label">{$t('reader.longCodeLines')}</span>
       <div class="rc-segmented">
         <button
           onclick={() => settings.update((s) => ({ ...s, wrapCodeBlocks: false }))}
           class="rc-seg-btn"
           class:active={!$settings.wrapCodeBlocks}
         >
-          Scroll
+          {$t('reader.codeScroll')}
         </button>
         <button
           onclick={() => settings.update((s) => ({ ...s, wrapCodeBlocks: true }))}
           class="rc-seg-btn"
           class:active={$settings.wrapCodeBlocks}
         >
-          Wrap
+          {$t('reader.codeWrap')}
         </button>
       </div>
     </div>
