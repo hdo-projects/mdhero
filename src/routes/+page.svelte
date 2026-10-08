@@ -1344,7 +1344,7 @@
      (`--chrome-top`, see utils/layout.ts). */
   .split-preview {
     position: fixed;
-    top: var(--chrome-top, 75px);
+    top: var(--chrome-top, 88px);
     right: 0;
     /* The right half of what the side tabs panel leaves. */
     left: calc(var(--tabs-w, 0px) + (100% - var(--tabs-w, 0px)) / 2);

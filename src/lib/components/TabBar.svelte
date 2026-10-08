@@ -273,9 +273,10 @@
 {/if}
 
 <style>
+  /* Sticks right under the 44px toolbar (see utils/layout.ts). */
   .tabbar {
     position: sticky;
-    top: 37px;
+    top: 44px;
     z-index: 15;
     background: #dee1e6;
     padding: 6px 8px 0;
