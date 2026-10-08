@@ -17,6 +17,7 @@
     label,
     left,
     top,
+    bottom = "0",
     zIndex = 14,
     onCommit,
   }: {
@@ -36,6 +37,8 @@
     /** CSS `left` of the handle, which straddles the panel's right border. */
     left: string;
     top: string;
+    /** CSS `bottom` of the handle, for a panel that stops short of the window. */
+    bottom?: string;
     /** Must match the panel's own, not exceed it: a higher one paints the
      *  handle across anything the panel correctly tucks underneath. */
     zIndex?: number;
@@ -206,7 +209,7 @@
 <div
   class="panel-resizer"
   class:dragging
-  style="left: {left}; top: {top}; z-index: {zIndex};"
+  style="left: {left}; top: {top}; bottom: {bottom}; z-index: {zIndex};"
   role="separator"
   aria-orientation="vertical"
   aria-label={label}
@@ -225,7 +228,6 @@
 <style>
   .panel-resizer {
     position: fixed;
-    bottom: 0;
     width: 6px;
     cursor: col-resize;
     background: transparent;
