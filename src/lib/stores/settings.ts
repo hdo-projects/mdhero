@@ -14,6 +14,8 @@ export interface ReaderSettings {
   restoreTabsOnLaunch: boolean;
   /** Width of the table-of-contents sidebar in px (#108). */
   tocWidth: number;
+  /** Wrap long lines in rendered code blocks instead of scrolling them. */
+  wrapCodeBlocks: boolean;
 }
 
 const STORAGE_KEY = "mdhero-settings";
@@ -51,6 +53,7 @@ function loadSettings(): ReaderSettings {
     autoPresentMarp: true,
     restoreTabsOnLaunch: true,
     tocWidth: DEFAULT_TOC_WIDTH,
+    wrapCodeBlocks: false,
   };
 
   if (typeof localStorage === "undefined") return defaults;
