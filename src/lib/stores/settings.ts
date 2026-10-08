@@ -106,6 +106,11 @@ function loadSettings(): ReaderSettings {
         tabsPosition: parsed.tabsPosition === "side" ? "side" : "top",
         tabsWidth: clampTabsWidth(parsed.tabsWidth),
         pageTheme: ["light", "dark"].includes(parsed.pageTheme) ? parsed.pageTheme : "auto",
+        // Read as-is, a hand-edited "false" is truthy and would leave it on.
+        syntaxHighlighting:
+          typeof parsed.syntaxHighlighting === "boolean"
+            ? parsed.syntaxHighlighting
+            : defaults.syntaxHighlighting,
       };
     }
   } catch {}
