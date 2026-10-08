@@ -195,11 +195,11 @@
   <div class="fixed inset-0 z-[9]" onclick={closeContextMenu} onkeydown={() => {}}></div>
   <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
     {#if isFileTab(contextMenuTab)}
-      <button onclick={() => handleCopy("path")} class="dropdown-item">
-        <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
-      </button>
       <button onclick={() => handleCopy("name")} class="dropdown-item">
         <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
+      </button>
+      <button onclick={() => handleCopy("path")} class="dropdown-item">
+        <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
       </button>
       <div class="dropdown-separator"></div>
     {/if}
