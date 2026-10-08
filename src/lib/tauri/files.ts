@@ -123,7 +123,7 @@ export async function saveAsNewDocument(tabId: string, content: string): Promise
 export async function openFileDialog(): Promise<void> {
   try {
     const selected = await open({
-      multiple: false,
+      multiple: true,
       filters: [
         {
           name: "Markdown",
@@ -132,9 +132,13 @@ export async function openFileDialog(): Promise<void> {
       ],
     });
 
-    if (selected) {
-      // selected can be string or string[] depending on version
-      const path = typeof selected === "string" ? selected : (selected as any)?.path ?? String(selected);
+    if (!selected) return;
+
+    // The dialog returns one path when single-select is enabled and an array
+    // when multi-select is enabled. Keep the single-path case for API
+    // compatibility, and open sequentially so each file is added to a tab.
+    const paths = Array.isArray(selected) ? selected : [selected];
+    for (const path of paths) {
       await openFile(path);
     }
   } catch (err) {
