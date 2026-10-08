@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
-  import { newDocument } from "$lib/tauri/files";
+  import { newDocument, revealInFileManager } from "$lib/tauri/files";
   import { copyFileName, copyPath } from "$lib/utils/clipboard";
 
   let {
@@ -14,8 +14,9 @@
   let overIndex = $state(-1);
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
-  // Result of the last copy, shown in place of the label of the entry clicked.
-  let copyFeedback = $state<{ item: "path" | "name"; text: string } | null>(null);
+  // Result of the last copy (or failed reveal), shown in place of the label of
+  // the entry clicked.
+  let copyFeedback = $state<{ item: "path" | "name" | "reveal"; text: string } | null>(null);
 
   function handleClose(e: MouseEvent, id: string) {
     e.stopPropagation();
@@ -114,6 +115,20 @@
     setTimeout(closeContextMenu, 900);
   }
 
+  // On success the file manager window is the feedback, so the menu just
+  // closes. It fails when the file was moved or deleted since it was opened.
+  async function handleReveal() {
+    if (!contextMenuTab) return;
+    try {
+      await revealInFileManager(contextMenuTab.filePath);
+      closeContextMenu();
+    } catch (err) {
+      console.error("revealItemInDir failed:", err);
+      copyFeedback = { item: "reveal", text: "Failed" };
+      setTimeout(closeContextMenu, 900);
+    }
+  }
+
   // Escape dismisses the menu and nothing else. The page's own Escape handler
   // listens on window too, but in the bubble phase, so without this it would
   // also close the active tab (close-on-Escape setting).
@@ -200,6 +215,9 @@
       </button>
       <button onclick={() => handleCopy("path")} class="dropdown-item">
         <span>{copyFeedback?.item === "path" ? copyFeedback.text : "Copy Path"}</span>
+      </button>
+      <button onclick={handleReveal} class="dropdown-item">
+        <span>{copyFeedback?.item === "reveal" ? copyFeedback.text : "Open File Location"}</span>
       </button>
       <div class="dropdown-separator"></div>
     {/if}
