@@ -76,6 +76,8 @@
     "newTab": "Neuer Tab",
     "copyPath": "Pfad kopieren",
     "copyFileName": "Dateinamen kopieren",
+    "openFileLocation": "Dateispeicherort öffnen",
+    "openFileLocationFailed": "Fehlgeschlagen",
     "showTabsSide": "Tabs seitlich anzeigen",
     "showTabsTop": "Tabs oben anzeigen",
     "addToNewGroup": "Tab zu neuer Gruppe hinzufügen",

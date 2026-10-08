@@ -76,6 +76,8 @@
     "newTab": "Nueva pestaña",
     "copyPath": "Copiar ruta",
     "copyFileName": "Copiar nombre del archivo",
+    "openFileLocation": "Abrir ubicación del archivo",
+    "openFileLocationFailed": "Error",
     "showTabsSide": "Mostrar pestañas al lado",
     "showTabsTop": "Mostrar pestañas arriba",
     "addToNewGroup": "Añadir pestaña a un grupo nuevo",

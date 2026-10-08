@@ -76,6 +76,8 @@
     "newTab": "Nouvel onglet",
     "copyPath": "Copier le chemin",
     "copyFileName": "Copier le nom du fichier",
+    "openFileLocation": "Ouvrir l'emplacement du fichier",
+    "openFileLocationFailed": "Échec",
     "showTabsSide": "Afficher les onglets sur le côté",
     "showTabsTop": "Afficher les onglets en haut",
     "addToNewGroup": "Ajouter l'onglet à un nouveau groupe",

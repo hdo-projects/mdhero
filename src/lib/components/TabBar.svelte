@@ -11,7 +11,7 @@
     MIN_TABS_WIDTH,
   } from "$lib/stores/settings";
   import { tocVisible, tocEntries } from "$lib/stores/toc";
-  import { newDocument } from "$lib/tauri/files";
+  import { newDocument, revealInFileManager } from "$lib/tauri/files";
   import { copyFileName, copyPath } from "$lib/utils/clipboard";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import { GROUP_COLORS, groupLabel, tabRuns, type GroupColor } from "$lib/utils/tab-groups";
@@ -31,8 +31,9 @@
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
   let contextMenuEl = $state<HTMLElement | null>(null);
-  // Result of the last copy, shown in place of the label of the entry clicked.
-  let copyFeedback = $state<{ item: "path" | "name"; text: string } | null>(null);
+  // Result of the last copy (or failed reveal), shown in place of the label of
+  // the entry clicked.
+  let copyFeedback = $state<{ item: "path" | "name" | "reveal"; text: string } | null>(null);
 
   // Tabs in a row across the top, or in a resizable panel on the left.
   let side = $derived($settings.tabsPosition === "side");
@@ -340,6 +341,20 @@
     setTimeout(closeContextMenu, 900);
   }
 
+  // On success the file manager window is the feedback, so the menu just
+  // closes. It fails when the file was moved or deleted since it was opened.
+  async function handleReveal() {
+    if (!contextMenuTab) return;
+    try {
+      await revealInFileManager(contextMenuTab.filePath);
+      closeContextMenu();
+    } catch (err) {
+      console.error("revealItemInDir failed:", err);
+      copyFeedback = { item: "reveal", text: translate("tabbar.openFileLocationFailed") };
+      setTimeout(closeContextMenu, 900);
+    }
+  }
+
   // Escape dismisses the menu and nothing else. The page's own Escape handler
   // listens on window too, but in the bubble phase, so without this it would
   // also close the active tab (close-on-Escape setting).
@@ -527,6 +542,9 @@
       </button>
       <button onclick={() => handleCopy("path")} class="dropdown-item">
         <span>{copyFeedback?.item === "path" ? copyFeedback.text : $t('tabbar.copyPath')}</span>
+      </button>
+      <button onclick={handleReveal} class="dropdown-item">
+        <span>{copyFeedback?.item === "reveal" ? copyFeedback.text : $t('tabbar.openFileLocation')}</span>
       </button>
       <div class="dropdown-separator"></div>
     {/if}

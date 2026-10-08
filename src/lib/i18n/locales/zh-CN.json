@@ -75,6 +75,8 @@
     "newTab": "新建标签页",
     "copyPath": "复制路径",
     "copyFileName": "复制文件名",
+    "openFileLocation": "打开文件所在位置",
+    "openFileLocationFailed": "打开失败",
     "showTabsSide": "在侧边显示标签页",
     "showTabsTop": "在顶部显示标签页",
     "addToNewGroup": "将标签页添加到新组",
