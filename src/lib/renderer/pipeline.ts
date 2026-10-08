@@ -31,6 +31,7 @@ import swift from "highlight.js/lib/languages/swift";
 import kotlin from "highlight.js/lib/languages/kotlin";
 import ruby from "highlight.js/lib/languages/ruby";
 import php from "highlight.js/lib/languages/php";
+import plaintext from "highlight.js/lib/languages/plaintext";
 
 hljs.registerLanguage("javascript", javascript);
 hljs.registerLanguage("typescript", typescript);
@@ -59,6 +60,9 @@ hljs.registerLanguage("ruby", ruby);
 hljs.registerLanguage("php", php);
 hljs.registerLanguage("jsx", javascript);
 hljs.registerLanguage("tsx", typescript);
+// Also registers the `text` and `txt` aliases. Unregistered, those fences fell
+// through to highlightAuto, which guessed a language and coloured prose.
+hljs.registerLanguage("plaintext", plaintext);
 
 export interface RenderResult {
   html: string;
