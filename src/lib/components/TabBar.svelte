@@ -13,6 +13,7 @@
   import { tocVisible, tocEntries } from "$lib/stores/toc";
   import { newDocument, revealInFileManager } from "$lib/tauri/files";
   import { copyFileName, copyPath } from "$lib/utils/clipboard";
+  import { createDelayedCall } from "$lib/utils/delayed-call";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import { GROUP_COLORS, groupLabel, tabRuns, type GroupColor } from "$lib/utils/tab-groups";
   import PanelResizer from "./PanelResizer.svelte";
@@ -227,6 +228,9 @@
     groupMenuId = null;
     contextMenuTab = tab;
     copyFeedback = null;
+    // The previous menu may still be showing its feedback: its close must not
+    // shut this one.
+    closeAfterFeedback.cancel();
     await placeMenu(e.currentTarget as HTMLElement);
   }
 
@@ -268,6 +272,8 @@
     contextMenuTab = null;
     copyFeedback = null;
     groupMenuId = groupId;
+    // The tab menu's close after feedback would shut the group editor too.
+    closeAfterFeedback.cancel();
     await placeMenu(anchor);
     groupNameInput?.focus();
     groupNameInput?.select();
@@ -333,12 +339,15 @@
     }
   }
 
+  // Leaves the feedback up long enough to read before the menu closes.
+  const closeAfterFeedback = createDelayedCall(closeContextMenu, 900);
+
   async function handleCopy(item: "path" | "name") {
     if (!contextMenuTab) return;
     const copy = item === "path" ? copyPath : copyFileName;
     const success = await copy(contextMenuTab.filePath);
     copyFeedback = { item, text: success ? translate("common.copied") : translate("common.copyFailed") };
-    setTimeout(closeContextMenu, 900);
+    closeAfterFeedback.schedule();
   }
 
   // On success the file manager window is the feedback, so the menu just
@@ -351,7 +360,7 @@
     } catch (err) {
       console.error("revealItemInDir failed:", err);
       copyFeedback = { item: "reveal", text: translate("tabbar.openFileLocationFailed") };
-      setTimeout(closeContextMenu, 900);
+      closeAfterFeedback.schedule();
     }
   }
 
