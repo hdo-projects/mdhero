@@ -74,7 +74,10 @@
     "unsaved": "Modifications non enregistrées",
     "diskChanged": "Modifié sur le disque pendant que vous l'éditiez",
     "newTab": "Nouvel onglet",
-    "copyPath": "Copier le chemin"
+    "copyPath": "Copier le chemin",
+    "copyFileName": "Copier le nom du fichier",
+    "openFileLocation": "Ouvrir l'emplacement du fichier",
+    "openFileLocationFailed": "Échec"
   },
   "empty": {
     "description": "Un lecteur et éditeur Markdown natif.",

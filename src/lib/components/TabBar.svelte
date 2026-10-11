@@ -125,7 +125,7 @@
       closeContextMenu();
     } catch (err) {
       console.error("revealItemInDir failed:", err);
-      copyFeedback = { item: "reveal", text: "Failed" };
+      copyFeedback = { item: "reveal", text: translate("tabbar.openFileLocationFailed") };
       setTimeout(closeContextMenu, 900);
     }
   }
@@ -212,18 +212,18 @@
   <div class="dropdown" style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;">
     {#if isFileTab(contextMenuTab)}
       <button onclick={() => handleCopy("name")} class="dropdown-item">
-        <span>{copyFeedback?.item === "name" ? copyFeedback.text : "Copy File Name"}</span>
+        <span>{copyFeedback?.item === "name" ? copyFeedback.text : $t('tabbar.copyFileName')}</span>
       </button>
       <button onclick={() => handleCopy("path")} class="dropdown-item">
         <span>{copyFeedback?.item === "path" ? copyFeedback.text : $t('tabbar.copyPath')}</span>
       </button>
       <button onclick={handleReveal} class="dropdown-item">
-        <span>{copyFeedback?.item === "reveal" ? copyFeedback.text : "Open File Location"}</span>
+        <span>{copyFeedback?.item === "reveal" ? copyFeedback.text : $t('tabbar.openFileLocation')}</span>
       </button>
       <div class="dropdown-separator"></div>
     {/if}
     <button onclick={handleCloseFromMenu} class="dropdown-item">
-      <span>Close Tab</span>
+      <span>{$t('menu.closeTab')}</span>
     </button>
   </div>
 {/if}

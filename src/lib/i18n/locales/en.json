@@ -74,7 +74,10 @@
     "unsaved": "Unsaved changes",
     "diskChanged": "Changed on disk while you were editing",
     "newTab": "New tab",
-    "copyPath": "Copy Path"
+    "copyPath": "Copy Path",
+    "copyFileName": "Copy File Name",
+    "openFileLocation": "Open File Location",
+    "openFileLocationFailed": "Failed"
   },
   "empty": {
     "description": "A native Markdown reader and editor.",

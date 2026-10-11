@@ -74,7 +74,10 @@
     "unsaved": "Ungespeicherte Änderungen",
     "diskChanged": "Auf dem Datenträger geändert, während Sie es bearbeitet haben",
     "newTab": "Neuer Tab",
-    "copyPath": "Pfad kopieren"
+    "copyPath": "Pfad kopieren",
+    "copyFileName": "Dateinamen kopieren",
+    "openFileLocation": "Dateispeicherort öffnen",
+    "openFileLocationFailed": "Fehlgeschlagen"
   },
   "empty": {
     "description": "Ein nativer Markdown-Reader und -Editor.",
