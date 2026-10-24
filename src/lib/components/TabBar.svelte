@@ -15,7 +15,7 @@
   import { copyFileName, copyPath } from "$lib/utils/clipboard";
   import { createDelayedCall } from "$lib/utils/delayed-call";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
-  import { GROUP_COLORS, groupLabel, tabRuns, type GroupColor } from "$lib/utils/tab-groups";
+  import { GROUP_COLORS, groupLabel, isGroupEdge, tabRuns, type GroupColor } from "$lib/utils/tab-groups";
   import PanelResizer from "./PanelResizer.svelte";
   import { translate, t, type MessageKey } from "$lib/i18n";
 
@@ -28,7 +28,7 @@
 
   const { tabs, activeTabId, groups } = tabStore;
   let dragIndex = $state(-1);
-  let overIndex = $state(-1);
+  let tabDrop = $state<TabDrop | null>(null);
   let contextMenuTab = $state<Tab | null>(null);
   let contextMenuPos = $state({ x: 0, y: 0 });
   let contextMenuEl = $state<HTMLElement | null>(null);
@@ -102,28 +102,16 @@
     e.preventDefault();
     dragIndex = idx;
 
-    // Tabs are found by their `data-index` (their place in the tab list), since
-    // group chips sit between them and folded groups hide some of them.
     function handleMouseMove(ev: MouseEvent) {
-      const items = document.querySelectorAll<HTMLElement>(".tabbar-files .tab[data-index]");
-      for (const item of items) {
-        const rect = item.getBoundingClientRect();
-        const inside = side
-          ? ev.clientY >= rect.top && ev.clientY < rect.bottom
-          : ev.clientX >= rect.left && ev.clientX < rect.right;
-        if (inside) {
-          overIndex = Number(item.dataset.index);
-          break;
-        }
-      }
+      tabDrop = tabDropAt(ev, idx);
     }
 
     function handleMouseUp() {
-      if (dragIndex >= 0 && overIndex >= 0 && dragIndex !== overIndex) {
-        tabStore.reorderTabs(dragIndex, overIndex);
+      if (dragIndex >= 0 && tabDrop) {
+        tabStore.reorderTabs(dragIndex, tabDrop.to, tabDrop.pastEdge);
       }
       dragIndex = -1;
-      overIndex = -1;
+      tabDrop = null;
       (window as any).__mdhero_tab_dragging = false;
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
@@ -134,17 +122,70 @@
     window.addEventListener("mouseup", handleMouseUp);
   }
 
+  // The line drawn where a drag will land: before or after a tab, or before or
+  // after a whole group. `index` is the tab the drop is aimed at.
+  type DropMark = { tab: number; index: number; after: boolean } | { group: string; index: number; after: boolean };
+  // Where a dragged tab would land: `to` is the place of the tab it is dropped
+  // on (as `moveTab` takes it), `pastEdge` whether it goes past the edge of that
+  // tab's group rather than joining it, `mark` where the drop line is drawn.
+  type TabDrop = { to: number; pastEdge: boolean; mark: DropMark | null };
+
+  /**
+   * Where a tab dragged from `from` would land, from the pointer. Tabs are
+   * found by their `data-index` (their place in the tab list), since group
+   * chips sit between them and folded groups hide some of them. A group's
+   * tab joins the group, except on the half that faces the way the dragged
+   * tab is heading when it is the group's last tab; a group's chip, and the
+   * space past the last tab, are outside every group.
+   */
+  function tabDropAt(ev: MouseEvent, from: number): TabDrop | null {
+    const pos = side ? ev.clientY : ev.clientX;
+    const items = document.querySelectorAll<HTMLElement>(
+      ".tabbar-files .tab[data-index], .tabbar-files .group-chip[data-group-chip]"
+    );
+    let end = -Infinity;
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const start = side ? rect.top : rect.left;
+      const stop = side ? rect.bottom : rect.right;
+      end = Math.max(end, stop);
+      if (pos < start || pos >= stop) continue;
+
+      const chipGroup = item.dataset.groupChip;
+      if (chipGroup) {
+        // Just before the group, which is also where a tab leaves it to the left.
+        const first = $tabs.findIndex((t) => t.groupId === chipGroup);
+        return { to: from < first ? first - 1 : first, pastEdge: true, mark: { group: chipGroup, index: first, after: false } };
+      }
+      const index = Number(item.dataset.index);
+      if (index === from) return { to: index, pastEdge: false, mark: null };
+      const movingRight = index > from;
+      const facing = movingRight ? pos >= (start + stop) / 2 : pos < (start + stop) / 2;
+      const pastEdge = facing && isGroupEdge($tabs, from, index);
+      const groupId = $tabs[index].groupId;
+      const mark = pastEdge && groupId ? { group: groupId, index, after: movingRight } : null;
+      return { to: index, pastEdge, mark };
+    }
+    if (items.length > 0 && pos >= end) {
+      const lastRun = runs[runs.length - 1];
+      const index = lastRun.tabs[lastRun.tabs.length - 1].index;
+      const mark = lastRun.group ? { group: lastRun.group.id, index, after: true } : { tab: index, index, after: true };
+      return { to: $tabs.length - 1, pastEdge: true, mark };
+    }
+    // Between two items: keep aiming where the pointer last was.
+    return tabDrop;
+  }
+
   // A group dragged by its chip (its header on the side) moves as a block.
   // It aims at a loose tab, and lands next to it as a dragged tab would, or
   // at another group, and lands past all of it. `index` is the tab passed to
   // `reorderGroup`; `after` puts the drop mark on the side it will land.
-  type GroupDrop = { tab: number; index: number; after: boolean } | { group: string; index: number; after: boolean };
   let draggedGroupId = $state<string | null>(null);
-  let groupDrop = $state<GroupDrop | null>(null);
+  let groupDrop = $state<DropMark | null>(null);
   // Set for the click that ends a drag, so that it does not fold the group.
   let swallowChipClick = false;
 
-  function groupDropAt(ev: MouseEvent, groupId: string): GroupDrop | null {
+  function groupDropAt(ev: MouseEvent, groupId: string): DropMark | null {
     const items = document.querySelectorAll<HTMLElement>(
       ".tabbar-files .tab[data-index], .tabbar-files .group-chip[data-group-chip]"
     );
@@ -198,13 +239,14 @@
     tabStore.toggleGroup(groupId);
   }
 
-  /** Which side of this tab or group the dragged group would land on, if it is the target. */
+  /** Which side of this tab or group the dragged tab or group would land on, if it is the target. */
   function dropSide(target: { tab: number } | { group: string }): "before" | "after" | null {
-    if (!groupDrop) return null;
+    const drop = groupDrop ?? tabDrop?.mark;
+    if (!drop) return null;
     const hit = "tab" in target
-      ? "tab" in groupDrop && groupDrop.tab === target.tab
-      : "group" in groupDrop && groupDrop.group === target.group;
-    return hit ? (groupDrop.after ? "after" : "before") : null;
+      ? "tab" in drop && drop.tab === target.tab
+      : "group" in drop && drop.group === target.group;
+    return hit ? (drop.after ? "after" : "before") : null;
   }
 
   function handleNewTab() {
@@ -404,7 +446,7 @@
     oncontextmenu={(e) => handleContextMenu(e, tab)}
     class="tab"
     class:active={$activeTabId === tab.id}
-    class:drag-over={overIndex === idx && dragIndex !== idx && dragIndex >= 0}
+    class:drag-over={tabDrop?.to === idx && !tabDrop.pastEdge && dragIndex !== idx && dragIndex >= 0}
     class:drop-before={dropSide({ tab: idx }) === "before"}
     class:drop-after={dropSide({ tab: idx }) === "after"}
     title={side && isFileTab(tab) ? stripVerbatimPrefix(tab.filePath) : undefined}

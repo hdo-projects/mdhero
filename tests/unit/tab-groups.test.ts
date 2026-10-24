@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GROUP_COLORS,
   groupLabel,
+  isGroupEdge,
   keepGroupsTogether,
   liveGroups,
   moveGroup,
@@ -57,9 +58,38 @@ describe("moveTab (drag and drop)", () => {
     expect(spec(moveTab(tabs("a:G b:G x y"), 0, 3))).toBe("b:G x y a");
   });
 
-  it("does not join a group when dropped at its edge", () => {
+  it("does not join a group when dropped on a loose tab next to it", () => {
     expect(spec(moveTab(tabs("x y a:G b:G"), 0, 1))).toBe("y x a:G b:G");
     expect(spec(moveTab(tabs("a:G b:G x y"), 3, 2))).toBe("a:G b:G y x");
+  });
+
+  it("joins a group of one tab, from either side", () => {
+    expect(spec(moveTab(tabs("x a:G y"), 0, 1))).toBe("a:G x:G y");
+    expect(spec(moveTab(tabs("x a:G y"), 2, 1))).toBe("x y:G a:G");
+  });
+
+  it("goes past the edge of a group instead of joining it, when told so", () => {
+    expect(spec(moveTab(tabs("x a:G b:G y"), 0, 2, true))).toBe("a:G b:G x y");
+    expect(spec(moveTab(tabs("x a:G b:G y"), 3, 1, true))).toBe("x y a:G b:G");
+  });
+
+  it("leaves a group that ends the tab bar, from its last tab or from further in", () => {
+    expect(spec(moveTab(tabs("x a:G b:G"), 2, 2, true))).toBe("x a:G b");
+    expect(spec(moveTab(tabs("x a:G b:G"), 1, 2, true))).toBe("x b:G a");
+  });
+
+  it("leaves a group that starts the tab bar, from its first tab or from further in", () => {
+    expect(spec(moveTab(tabs("a:G b:G x"), 0, 0, true))).toBe("a b:G x");
+    expect(spec(moveTab(tabs("a:G b:G x"), 1, 0, true))).toBe("b a:G x");
+  });
+
+  it("keeps a group of one tab when it goes past an edge", () => {
+    expect(spec(moveTab(tabs("a:G x"), 0, 1, true))).toBe("x a:G");
+  });
+
+  it("changes nothing for a loose tab dropped past an edge where it already is", () => {
+    const list = tabs("a:G x");
+    expect(moveTab(list, 1, 1, true)).toBe(list);
   });
 
   it("keeps a group of one tab wherever that tab goes, outside another group", () => {
@@ -70,6 +100,27 @@ describe("moveTab (drag and drop)", () => {
     const list = tabs("a:G b");
     expect(moveTab(list, 1, 1)).toBe(list);
     expect(moveTab(list, 0, 5)).toBe(list);
+  });
+});
+
+describe("isGroupEdge", () => {
+  it("is true for the last tab of a group on the side the dragged tab is heading", () => {
+    const list = tabs("x a:G b:G y");
+    expect(isGroupEdge(list, 0, 2)).toBe(true);
+    expect(isGroupEdge(list, 3, 1)).toBe(true);
+  });
+
+  it("is false for the other tabs of a group, and for loose tabs", () => {
+    const list = tabs("x a:G b:G y");
+    expect(isGroupEdge(list, 0, 1)).toBe(false);
+    expect(isGroupEdge(list, 3, 2)).toBe(false);
+    expect(isGroupEdge(list, 0, 3)).toBe(false);
+  });
+
+  it("counts the ends of the tab bar as edges", () => {
+    const list = tabs("a:G b:G c:G");
+    expect(isGroupEdge(list, 0, 2)).toBe(true);
+    expect(isGroupEdge(list, 2, 0)).toBe(true);
   });
 });
 

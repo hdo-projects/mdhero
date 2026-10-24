@@ -287,8 +287,10 @@ function createTabStore() {
 
   // A dragged tab joins, keeps or leaves a group depending on where it lands
   // (see `moveTab`).
-  function reorderTabs(fromIndex: number, toIndex: number) {
-    tabs.update((ts) => moveTab(ts, fromIndex, toIndex));
+  function reorderTabs(fromIndex: number, toIndex: number, pastEdge = false) {
+    const ts = get(tabs);
+    const next = moveTab(ts, fromIndex, toIndex, pastEdge);
+    if (next !== ts) tabs.set(next);
   }
 
   // A group dragged by its chip moves as a block (see `moveGroup`).

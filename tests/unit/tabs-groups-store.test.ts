@@ -144,15 +144,15 @@ describe("tab groups in the tab store", () => {
     expect(get(store.activeTabId)).toBe(d);
   });
 
-  it("drags a tab into a group by dropping it between two of its tabs", async () => {
+  it("drags a tab into a group by dropping it on one of its tabs", async () => {
     const store = await freshStore();
     const [a, b, c] = open(store, "a.md", "b.md", "c.md");
     const g = store.createGroup(a);
     store.moveToGroup(b, g);
 
-    store.reorderTabs(2, 0); // c before a: at the group's edge, stays loose
+    store.reorderTabs(2, 0, true); // c before a, past the group's edge: stays loose
     expect(groupOf(store, c)).toBeNull();
-    store.reorderTabs(0, 1); // c between a and b: joins
+    store.reorderTabs(0, 1); // c on a: lands after it, in the group
     expect(order(store)).toEqual(["a.md", "c.md", "b.md"]);
     expect(groupOf(store, c)?.id).toBe(g);
   });

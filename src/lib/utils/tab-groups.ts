@@ -50,28 +50,39 @@ export function keepGroupsTogether<T extends Groupable>(tabs: T[]): T[] {
 }
 
 /**
- * Drag and drop: moves the tab at `from` to `to`. Dropped between two tabs of
- * one group, the tab joins that group; dropped next to its own group, it stays
- * in it; anywhere else it leaves it. A tab alone in its group is the whole
- * group, so it keeps it wherever it lands outside another group.
+ * Drag and drop: moves the tab at `from` to `to`, the place of the tab it is
+ * dropped on. Dropped on a tab of a group, it joins that group; on a loose
+ * tab, it ends up outside any group. `pastEdge` says the drop is beyond the
+ * edge of the group it lands next to (see `isGroupEdge`; also a drop on a
+ * group's chip, or past the last tab of the bar): the tab then stays out of
+ * that group. A tab alone in its group is the whole group, so it keeps it
+ * wherever it lands outside another group.
  */
-export function moveTab<T extends Groupable>(tabs: T[], from: number, to: number): T[] {
-  if (from === to || !tabs[from] || !tabs[to]) return tabs;
+export function moveTab<T extends Groupable>(tabs: T[], from: number, to: number, pastEdge = false): T[] {
+  if (!tabs[from] || !tabs[to] || (from === to && !pastEdge)) return tabs;
   const arr = [...tabs];
   const [moved] = arr.splice(from, 1);
   arr.splice(to, 0, moved);
 
-  const before = arr[to - 1]?.groupId ?? null;
-  const after = arr[to + 1]?.groupId ?? null;
   const own = moved.groupId;
   const aloneInGroup = !!own && !tabs.some((t) => t !== moved && t.groupId === own);
-  let groupId: string | null;
-  if (before && before === after) groupId = before;
-  else if (own && (aloneInGroup || before === own || after === own)) groupId = own;
-  else groupId = null;
+  const onto = pastEdge ? null : tabs[to].groupId;
+  const groupId = onto ?? (aloneInGroup ? own : null);
 
   if (groupId !== own) arr[to] = { ...moved, groupId };
-  return keepGroupsTogether(arr);
+  const result = keepGroupsTogether(arr);
+  return result.every((t, i) => t === tabs[i]) ? tabs : result;
+}
+
+/**
+ * Whether the tab at `to` is the last of its group on the side a tab dragged
+ * from `from` is heading. Dropped on the half of such a tab that faces that
+ * side, a tab goes past the group instead of joining it.
+ */
+export function isGroupEdge(tabs: Groupable[], from: number, to: number): boolean {
+  const groupId = tabs[to]?.groupId;
+  if (!groupId) return false;
+  return tabs[to > from ? to + 1 : to - 1]?.groupId !== groupId;
 }
 
 /**
