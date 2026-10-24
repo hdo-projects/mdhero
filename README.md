@@ -55,6 +55,7 @@ Markdown is where developers, writers, and AI live today — READMEs, Claude Cod
 
 ### Editing (v0.2.0)
 - **Lightweight in-app editor** — `Cmd+E` flips any local file into edit mode
+- **Markdown highlighting** — headings, emphasis, links, lists, quotes and code are colored as you type, in light and dark (Settings › Editor to turn it off)
 - **Save with `Cmd+S`** — writes back to disk; the file watcher knows it was you and skips the reload
 - **Stays where you were** — source-line scroll sync keeps your position across viewer ↔ raw ↔ edit
 - **Dirty indicator** — `•` in the tab title and toolbar when you have unsaved changes
@@ -62,6 +63,7 @@ Markdown is where developers, writers, and AI live today — READMEs, Claude Cod
 
 ### Navigation
 - **Multiple tabs** — open many files, drag to reorder, Cmd+1–9 to switch
+- **Tabs on the side** — move the tabs into a resizable panel on the left, with a file's folder under its name when another open file has the same name
 - **Table of Contents** — auto-generated sidebar with active heading tracking
 - **Search (Cmd+F)** — with match highlighting
 - **Vim keys** — j/k/gg/G/d/u/[/] for keyboard-first navigation
@@ -184,7 +186,7 @@ MDHero runs entirely on your machine.
 - **No telemetry.** No analytics. No tracking.
 - **No account required.** Use it anonymously.
 - **Your files never leave your computer.** Rendering happens locally.
-- **Network access** is limited to: checking for new releases (once per 24h) and fetching URLs you explicitly paste into the Open URL feature.
+- **Network access** is limited to: asking GitHub whether there is a newer release (once per 24h, sending nothing about you; you can turn this off in Settings) and fetching URLs you explicitly paste into the Open URL feature. See [SECURITY.md](SECURITY.md#scope) for exactly what each request contains.
 
 ---
 

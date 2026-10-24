@@ -1,9 +1,32 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import { settings } from "$lib/stores/settings";
+  import { isMac } from "$lib/utils/platform";
+  import { t, locale, setLocale, SUPPORTED_LOCALES, type Locale } from "$lib/i18n";
   import AILookupSettings from "./AILookupSettings.svelte";
 
   let { visible = $bindable(false) }: { visible: boolean } = $props();
+
+  // Not in the settings store: a new launch decides whether to join this
+  // window before its webview exists, so Rust owns this one (#71).
+  const showWindowMode = !isMac();
+  let openInExistingWindow = $state(false);
+
+  $effect(() => {
+    if (visible && showWindowMode) {
+      invoke<boolean>("get_open_in_existing_window")
+        .then((enabled) => (openInExistingWindow = enabled))
+        .catch(() => {});
+    }
+  });
+
+  function setOpenInExistingWindow(enabled: boolean) {
+    openInExistingWindow = enabled;
+    invoke("set_open_in_existing_window", { enabled }).catch(() => {
+      openInExistingWindow = !enabled;
+    });
+  }
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) visible = false;
@@ -22,20 +45,36 @@
   <div class="dialog-backdrop" onclick={handleBackdropClick} onkeydown={handleKeydown}>
     <div class="dialog">
       <div class="dialog-header">
-        <h2 class="dialog-title">Settings</h2>
-        <button onclick={() => (visible = false)} class="dialog-close" aria-label="Close">
+        <h2 class="dialog-title">{$t('settings.title')}</h2>
+        <button onclick={() => (visible = false)} class="dialog-close" aria-label={$t('common.close')}>
           <X size={16} />
         </button>
       </div>
 
       <div class="dialog-body">
         <section class="settings-section">
-          <h3 class="section-title">Behavior</h3>
+          <h3 class="section-title">{$t('settings.behavior')}</h3>
 
           <label class="setting-row">
             <div class="setting-text">
-              <span class="setting-label">Close on Escape</span>
-              <span class="setting-hint">Press ESC to close the current tab. App quits after the last tab.</span>
+              <span class="setting-label">{$t('settings.language')}</span>
+              <span class="setting-hint">{$t('settings.languageHint')}</span>
+            </div>
+            <select
+              class="setting-select"
+              value={$locale}
+              onchange={(e) => setLocale(e.currentTarget.value as Locale)}
+            >
+              {#each SUPPORTED_LOCALES as l (l.code)}
+                <option value={l.code}>{l.nativeName} · {l.label}</option>
+              {/each}
+            </select>
+          </label>
+
+          <label class="setting-row">
+            <div class="setting-text">
+              <span class="setting-label">{$t('settings.closeOnEscape')}</span>
+              <span class="setting-hint">{$t('settings.closeOnEscapeHint')}</span>
             </div>
             <input
               type="checkbox"
@@ -47,8 +86,8 @@
 
           <label class="setting-row">
             <div class="setting-text">
-              <span class="setting-label">Restore tabs on launch</span>
-              <span class="setting-hint">Reopen the files that were open last time, in the same order.</span>
+              <span class="setting-label">{$t('settings.restoreTabs')}</span>
+              <span class="setting-hint">{$t('settings.restoreTabsHint')}</span>
             </div>
             <input
               type="checkbox"
@@ -58,10 +97,38 @@
             />
           </label>
 
+          {#if showWindowMode}
+            <label class="setting-row">
+              <div class="setting-text">
+                <span class="setting-label">{$t('settings.openInExistingWindow')}</span>
+                <span class="setting-hint">{$t('settings.openInExistingWindowHint')}</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={openInExistingWindow}
+                onchange={(e) => setOpenInExistingWindow(e.currentTarget.checked)}
+                class="setting-switch"
+              />
+            </label>
+          {/if}
+
           <label class="setting-row">
             <div class="setting-text">
-              <span class="setting-label">Auto-present Marp decks</span>
-              <span class="setting-hint">Open documents with <code>marp: true</code> frontmatter as a slideshow.</span>
+              <span class="setting-label">{$t('settings.tabsOnSide')}</span>
+              <span class="setting-hint">{$t('settings.tabsOnSideHint')}</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={$settings.tabsPosition === "side"}
+              onchange={(e) => settings.update((s) => ({ ...s, tabsPosition: e.currentTarget.checked ? "side" : "top" }))}
+              class="setting-switch"
+            />
+          </label>
+
+          <label class="setting-row">
+            <div class="setting-text">
+              <span class="setting-label">{$t('settings.autoPresentMarp')}</span>
+              <span class="setting-hint">{#each $t('settings.autoPresentMarpHint').split('{code}') as part, i}{#if i > 0}<code>marp: true</code>{/if}{part}{/each}</span>
             </div>
             <input
               type="checkbox"
@@ -70,15 +137,28 @@
               class="setting-switch"
             />
           </label>
-        </section>
-
-        <section class="settings-section">
-          <h3 class="section-title">Editor</h3>
 
           <label class="setting-row">
             <div class="setting-text">
-              <span class="setting-label">Line numbers</span>
-              <span class="setting-hint">Show a line-number gutter in the editor.</span>
+              <span class="setting-label">{$t('settings.autoCheckUpdates')}</span>
+              <span class="setting-hint">{$t('settings.autoCheckUpdatesHint')}</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={$settings.autoCheckUpdates}
+              onchange={(e) => settings.update((s) => ({ ...s, autoCheckUpdates: e.currentTarget.checked }))}
+              class="setting-switch"
+            />
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <h3 class="section-title">{$t('settings.editor')}</h3>
+
+          <label class="setting-row">
+            <div class="setting-text">
+              <span class="setting-label">{$t('settings.lineNumbers')}</span>
+              <span class="setting-hint">{$t('settings.lineNumbersHint')}</span>
             </div>
             <input
               type="checkbox"
@@ -87,11 +167,24 @@
               class="setting-switch"
             />
           </label>
+
+          <label class="setting-row">
+            <div class="setting-text">
+              <span class="setting-label">{$t('settings.syntaxHighlighting')}</span>
+              <span class="setting-hint">{$t('settings.syntaxHighlightingHint')}</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={$settings.syntaxHighlighting}
+              onchange={(e) => settings.update((s) => ({ ...s, syntaxHighlighting: e.currentTarget.checked }))}
+              class="setting-switch"
+            />
+          </label>
         </section>
 
         <section class="settings-section">
-          <h3 class="section-title">AI Lookup</h3>
-          <p class="section-hint">Right-click selected text in the viewer to send it to an AI tool. Manage providers and saved prompts below.</p>
+          <h3 class="section-title">{$t('settings.aiLookup')}</h3>
+          <p class="section-hint">{$t('settings.aiLookupHint')}</p>
           <AILookupSettings />
         </section>
       </div>
@@ -263,6 +356,29 @@
     transition: background 0.15s;
     flex-shrink: 0;
     margin: 0;
+  }
+
+  .setting-select {
+    flex-shrink: 0;
+    max-width: 220px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: #1c1c1e;
+    background: #f9f9fb;
+    border: 1px solid #e5e5ea;
+    border-radius: 7px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  :global(html.dark) .setting-select {
+    background: #1c1c1e;
+    border-color: #3a3a3c;
+    color: #e5e5e7;
+  }
+
+  .setting-select:focus {
+    border-color: #0891B2;
   }
 
   :global(html.dark) .setting-switch {

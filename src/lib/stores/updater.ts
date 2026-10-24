@@ -1,16 +1,20 @@
 import { writable, get } from "svelte/store";
 import { getVersion } from "@tauri-apps/api/app";
+import { settings } from "./settings";
 
-function detectOS(): string {
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  if (/Mac|iPhone|iPad|iPod/.test(ua)) return "darwin";
-  if (/Win/.test(ua)) return "win32";
-  if (/Linux/.test(ua)) return "linux";
-  return "unknown";
-}
-
-const PRIMARY_ENDPOINT = "https://mdhero.app/api/version";
-const FALLBACK_GITHUB = "https://api.github.com/repos/vaibhav-kakde-in/mdhero/releases/latest";
+/**
+ * Where the update check asks for the latest release (#180).
+ *
+ * It asks GitHub's public releases API and compares the answer with this
+ * install's version on the user's machine. The request carries nothing about
+ * the user: no version, no OS, no identifier. Up to v0.2.10 the check went to
+ * `mdhero.app/api/version` with the version and OS as parameters, where they
+ * were counted per day. That counter is gone, and so is the request.
+ *
+ * Keep it this way. Anything added to this request is data about the user, and
+ * the README promises there is none.
+ */
+const RELEASES_ENDPOINT = "https://api.github.com/repos/vaibhav-kakde-in/mdhero/releases/latest";
 
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const LAST_CHECK_KEY = "mdhero_update_check";
@@ -53,23 +57,8 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-async function fetchPrimary(currentVersion: string, os: string): Promise<UpdateInfo | null> {
-  const u = `${PRIMARY_ENDPOINT}?from=${encodeURIComponent(currentVersion)}&os=${encodeURIComponent(os)}`;
-  const res = await fetch(u, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`primary endpoint ${res.status}`);
-  const data = await res.json();
-  if (!data?.version || !data?.url) return null;
-  return {
-    version: String(data.version).replace(/^v/, ""),
-    url: String(data.url),
-    download: data.download ? String(data.download) : undefined,
-    notes: data.notes ? String(data.notes) : undefined,
-    severity: data.severity === "important" ? "important" : "normal",
-  };
-}
-
-async function fetchFallback(): Promise<UpdateInfo | null> {
-  const res = await fetch(FALLBACK_GITHUB, {
+async function fetchLatestRelease(): Promise<UpdateInfo | null> {
+  const res = await fetch(RELEASES_ENDPOINT, {
     headers: { Accept: "application/vnd.github.v3+json" },
   });
   if (!res.ok) return null;
@@ -85,6 +74,9 @@ async function fetchFallback(): Promise<UpdateInfo | null> {
  */
 export async function checkForUpdates(force = false): Promise<void> {
   if (import.meta.env.DEV && !force) return;
+  // The automatic daily check can be switched off in Settings (#180). An
+  // explicit "Check for Updates…" is the user asking, so it always runs.
+  if (!force && !get(settings).autoCheckUpdates) return;
 
   if (!force) {
     try {
@@ -97,14 +89,15 @@ export async function checkForUpdates(force = false): Promise<void> {
   checkInFlight.set(true);
 
   try {
+    // Read locally and compared locally; never sent anywhere.
     const currentVersion = await getVersion().catch(() => "0.0.0");
-    const os = detectOS();
 
     let latest: UpdateInfo | null = null;
     try {
-      latest = await fetchPrimary(currentVersion, os);
+      latest = await fetchLatestRelease();
     } catch {
-      latest = await fetchFallback();
+      // Offline, or GitHub unreachable: no banner, try again next launch.
+      return;
     }
 
     if (!latest) return;

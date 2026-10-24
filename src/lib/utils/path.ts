@@ -6,6 +6,8 @@
 // titles were showing. These helpers handle both separators and are unit tested
 // against real paths from all three platforms.
 
+import type { Translate } from "../i18n";
+
 /**
  * Last segment of a filesystem path — the file or folder name.
  *
@@ -44,4 +46,56 @@ export function shortenHomePath(path: string): string {
   );
   if (!match) return normalized;
   return "~/" + match[1].replace(/\\/g, "/");
+}
+
+/**
+ * The line under a tab's name in the side tabs panel, for the tabs that need
+ * one (see `tabsNeedingFolder`): the folder a file is in, or what kind of tab
+ * it is for the ones without a file. Only the last two folder segments are
+ * kept — enough to tell two README.md apart, without a long path that the
+ * ellipsis would cut from its useful end. Takes the translator, as
+ * `formatRelativeTime` does, so the template can pass `$t`.
+ */
+export function tabFolderLabel(filePath: string, tr: Translate): string {
+  if (filePath.startsWith("paste://")) return tr("tabbar.folderPasted");
+  if (filePath.startsWith("new://")) return tr("tabbar.folderNotSaved");
+  if (filePath.startsWith("url://")) {
+    try {
+      return new URL(filePath.slice("url://".length)).host;
+    } catch {
+      return tr("tabbar.folderWebPage");
+    }
+  }
+
+  // Shortened with the file name still on, so a file directly in the home
+  // directory comes out as `~` rather than the full home path.
+  const shortened = shortenHomePath(filePath);
+  const cut = Math.max(shortened.lastIndexOf("/"), shortened.lastIndexOf("\\"));
+  if (cut < 0) return "";
+  const folder = cut === 0 ? "/" : shortened.slice(0, cut);
+  const segments = folder.split(/[\\/]/).filter(Boolean);
+  if (segments.length <= 2) return folder.replace(/\\/g, "/");
+  return "…/" + segments.slice(-2).join("/");
+}
+
+/**
+ * The ids of the side tabs that show their folder under their name. A tab
+ * shows its name alone unless another open tab has the same name and the
+ * folder tells them apart: two README.md from different projects get it, two
+ * "Untitled" (both "Not saved yet") don't. The full path is on hover anyway.
+ */
+export function tabsNeedingFolder(
+  tabs: readonly { id: string; fileName: string; filePath: string }[]
+): Set<string> {
+  const foldersByName = new Map<string, Set<string>>();
+  for (const tab of tabs) {
+    const folders = foldersByName.get(tab.fileName) ?? new Set<string>();
+    // Only compared with each other, so the keys themselves will do: the
+    // grouping is the same in every language.
+    folders.add(tabFolderLabel(tab.filePath, (key) => key));
+    foldersByName.set(tab.fileName, folders);
+  }
+  return new Set(
+    tabs.filter((tab) => foldersByName.get(tab.fileName)!.size > 1).map((tab) => tab.id)
+  );
 }

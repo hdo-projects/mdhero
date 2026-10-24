@@ -17,6 +17,7 @@
   } from "$lib/tauri/files";
   import { showToast } from "$lib/stores/toast";
   import { basename } from "$lib/utils/path";
+  import { promptOverwrite, promptUnsaved } from "$lib/utils/unsaved-prompt";
   import { settings, getContentMaxWidth, stepFontSize, DEFAULT_FONT_SIZE } from "$lib/stores/settings";
   import { initFileWatcher, stopFileWatcher } from "$lib/tauri/watcher";
   import { restoreSession } from "$lib/tauri/session";
@@ -35,6 +36,7 @@
   import PasteModal from "$lib/components/PasteModal.svelte";
   import OpenDialog from "$lib/components/OpenDialog.svelte";
   import SettingsDialog from "$lib/components/SettingsDialog.svelte";
+  import LanguageDialog from "$lib/components/LanguageDialog.svelte";
   import AboutDialog from "$lib/components/AboutDialog.svelte";
   import CustomPromptModal from "$lib/components/CustomPromptModal.svelte";
   import { assembleUrlByIds, consumePendingSelection } from "$lib/stores/aiLookup";
@@ -50,9 +52,11 @@
   import { updateScrollPercent } from "$lib/stores/recents";
   import { checkForUpdates, updateAvailable, updateDismissed, checkInFlight } from "$lib/stores/updater";
   import { get } from "svelte/store";
+  import { t, translate, hasChosenLocale } from "$lib/i18n";
   import { getCurrentSourceLine, scrollToSourceLine, type ViewMode } from "$lib/utils/scroll-sync";
   import { gutterHtml, gutterWidth, lineCount } from "$lib/utils/line-gutter";
   import { createWheelZoom } from "$lib/utils/wheel-zoom";
+  import { chromeTop, sideTabsWidth, SIDE_TABS_CHROME, TOP_TABS_CHROME } from "$lib/utils/layout";
   import { saveProgress, getProgress } from "$lib/stores/readingProgress";
 
   let rendererReady = $state(false);
@@ -61,6 +65,7 @@
   let pasteDefaultMode = $state<"paste" | "url">("paste");
   let openVisible = $state(false);
   let settingsVisible = $state(false);
+  let languageVisible = $state(false);
   let aboutVisible = $state(false);
   let customPromptVisible = $state(false);
   let customPromptSelection = $state("");
@@ -92,7 +97,7 @@
   // ESC handler. Each modal's own ESC handler also calls stopPropagation(); the
   // two together cover both focus-inside and focus-outside-modal cases.
   let anyModalVisible = $derived(
-    searchVisible || pasteVisible || openVisible || settingsVisible || aboutVisible || customPromptVisible || lightboxVisible
+    searchVisible || pasteVisible || openVisible || settingsVisible || aboutVisible || customPromptVisible || lightboxVisible || languageVisible
   );
 
   // Reading progress: debounced scroll save + restore guard
@@ -195,6 +200,16 @@
   // modes, which would leave the variable stale for anything still reading it.
   $effect(() => {
     document.documentElement.style.setProperty("--toc-w", `${$settings.tocWidth}px`);
+  });
+
+  // Same for the side tabs panel, and the height of the chrome above the
+  // document, which loses the tab row when the tabs move to the side (see
+  // utils/layout.ts). Zen mode hides the tabs, so it takes the panel away too.
+  $effect(() => {
+    const width = zenMode ? 0 : sideTabsWidth($settings);
+    const root = document.documentElement;
+    root.style.setProperty("--tabs-w", `${width}px`);
+    root.style.setProperty("--chrome-top", `${width > 0 ? SIDE_TABS_CHROME : TOP_TABS_CHROME}px`);
   });
 
   // Live-render the editor content into the split preview pane, debounced so
@@ -320,8 +335,11 @@
     });
   }
 
-  async function handleSave(tab: Tab) {
-    if (!tab.dirty) return;
+  /** Saves the tab. Returns false if nothing was written — not dirty, the
+   *  Save-As dialog was cancelled, the on-disk version was kept, or the write
+   *  failed. Callers that gate a destructive action on a save need that (#160). */
+  async function handleSave(tab: Tab): Promise<boolean> {
+    if (!tab.dirty) return true;
     try {
       let targetPath = tab.filePath;
       let targetName = tab.fileName;
@@ -329,20 +347,19 @@
       // this first save, which rebinds the tab to the chosen real path (#63).
       if (tab.filePath.startsWith("new://")) {
         const saved = await saveAsNewDocument(tab.id, tab.editContent);
-        if (!saved) return; // cancelled — keep editing, stays dirty
+        if (!saved) return false; // cancelled — keep editing, stays dirty
         targetPath = saved;
         targetName = basename(saved);
       } else {
         if (tab.diskChanged) {
           // The file changed on disk while these edits were unsaved (#97).
-          // Same convention as the close dialog: the default button is the
-          // safe one, so a reflexive Return keeps editing.
-          const { ask } = await import("@tauri-apps/plugin-dialog");
-          const keepEditing = await ask(
-            `${tab.fileName} changed on disk while you were editing. Saving will overwrite that version.`,
-            { title: "File changed on disk", kind: "warning", okLabel: "Keep Editing", cancelLabel: "Overwrite" }
+          // Overwrite is the explicit answer; Escape and the close box cancel
+          // the save and leave both versions intact (#160).
+          const overwrite = await promptOverwrite(
+            translate("page.diskChangedMsg", { name: tab.fileName }),
+            translate("page.diskChangedTitle")
           );
-          if (keepEditing) return;
+          if (!overwrite) return false;
         }
         await saveFile(tab.filePath, tab.editContent);
       }
@@ -370,9 +387,11 @@
         loading: false,
         error: null,
       });
+      return true;
     } catch (err) {
       console.error("Save failed:", err);
-      alert(`Save failed: ${err}`);
+      alert(translate("page.saveFailed", { err: String(err) }));
+      return false;
     }
   }
 
@@ -406,7 +425,7 @@
     const name = basename(resolved);
 
     if (!(await pathExists(resolved))) {
-      showToast(`Can't find “${name}”`);
+      showToast(translate("page.cantFind", { name }));
       return;
     }
 
@@ -420,14 +439,14 @@
     // one click. The capability independently permits only PDFs and common
     // raster images; keep this denylist as defense-in-depth.
     if (isExecutablePath(resolved)) {
-      showToast(`Won't open executable file “${name}”. Open it from your file manager if you trust it.`);
+      showToast(translate("page.wontOpenExecutable", { name }));
       return;
     }
 
     try {
       await openWithSystem(resolved);
     } catch {
-      showToast(`Couldn't open “${name}”`);
+      showToast(translate("page.couldntOpen", { name }));
     }
   }
 
@@ -488,26 +507,30 @@
     // WKWebView (silently returns false), which made this guard dead and closed
     // dirty tabs without warning.
     if (t.dirty) {
-      const { ask } = await import("@tauri-apps/plugin-dialog");
-      // The primary/default button (Enter) must be the SAFE action, so a
-      // reflexive Return can't destroy unsaved work. `ask`'s OK button is the
-      // default, so OK = "Keep Editing" and the cancel-position button is the
-      // deliberate, non-default "Discard".
-      const keepEditing = await ask(`You have unsaved changes to ${t.fileName}.`, {
-        title: "Unsaved changes",
-        kind: "warning",
-        okLabel: "Keep Editing",
-        cancelLabel: "Discard",
-      });
-      if (keepEditing) return false;
+      // Three answers, so neither reflex is destructive: Return saves, Escape
+      // cancels, and Discard has to be clicked (#160). Anything unexpected is
+      // treated as Cancel — see `promptUnsaved`.
+      const choice = await promptUnsaved(
+        translate("page.unsavedChangesOne", { name: t.fileName }),
+        translate("page.unsavedChangesTitle")
+      );
+      if (choice === "cancel") return false;
+      if (choice === "save") {
+        if (!(await handleSave(t))) return false; // save cancelled or failed
+      }
     }
     // Flush reading progress before closing — catches the case where user
     // scrolls and closes within the 500ms debounce window
     if (t.id === $activeTabId) {
       saveProgressNow();
     }
+    // Re-read the tab: saving a `new://` document rebinds it to the real path
+    // it was just written to, and `t` is a snapshot from before that. Unwatching
+    // the stale `new://` path would leave the real file watched after the tab
+    // closed.
+    const watchedPath = $tabs.find((x) => x.id === id)?.filePath ?? t.filePath;
     tabStore.closeTab(id);
-    unwatchFile(t.filePath);
+    unwatchFile(watchedPath);
     return true;
   }
 
@@ -570,6 +593,11 @@
     initRenderer();
     rendererReady = true;
 
+    // First run: ask for a language. The picker highlights the OS-detected
+    // one (English when the OS language isn't supported); choosing or
+    // dismissing stores a choice, so it only ever appears once.
+    if (!hasChosenLocale()) languageVisible = true;
+
     // Expose functions for native menu and OS file-open handlers
     (window as any).__mdhero_open_file = () => { openVisible = true; };
     (window as any).__mdhero_open_path = (path: string) => {
@@ -612,21 +640,21 @@
     (window as any).__mdhero_quit = async () => {
       const dirty = $tabs.filter((t) => t.dirty);
       if (dirty.length > 0) {
-        try {
-          const { ask } = await import("@tauri-apps/plugin-dialog");
-          const msg =
-            dirty.length === 1
-              ? `You have unsaved changes to ${dirty[0].fileName}.`
-              : `You have unsaved changes in ${dirty.length} tabs.`;
-          const keepEditing = await ask(msg, {
-            title: "Unsaved changes",
-            kind: "warning",
-            okLabel: "Keep Editing",
-            cancelLabel: "Discard",
-          });
-          if (keepEditing) return;
-        } catch {
-          // Fall through and quit rather than trap the user behind prevent_close.
+        const msg =
+          dirty.length === 1
+            ? translate("page.unsavedChangesOne", { name: dirty[0].fileName })
+            : translate("page.unsavedChangesMany", { count: dirty.length });
+        const choice = await promptUnsaved(msg, translate("page.unsavedChangesTitle"));
+        // Cancel, Escape, the close box and a dialog that fails all land here.
+        // The old code quit on a dialog failure, which is the same data loss by
+        // a different route (#160).
+        if (choice === "cancel") return;
+        if (choice === "save") {
+          for (const t of dirty) {
+            // An unsaved `new://` tab opens a Save-As dialog; cancelling that
+            // one aborts the quit rather than dropping the document.
+            if (!(await handleSave(t))) return;
+          }
         }
       }
       saveProgressNow();
@@ -640,7 +668,7 @@
       // If still nothing, give the user explicit feedback — silence is confusing
       // when a menu item is the trigger.
       if (!get(updateAvailable)) {
-        alert("MDHero is up to date.");
+        alert(translate("page.upToDate"));
       }
     };
     // Router for AI Lookup right-click menu items. lib.rs::setup forwards any
@@ -819,7 +847,7 @@
   function jumpToHeading(direction: "prev" | "next") {
     const headings = document.querySelectorAll("article h1[id], article h2[id], article h3[id], article h4[id], article h5[id], article h6[id]");
     if (headings.length === 0) return;
-    const offset = 80;
+    const offset = chromeTop() + 5;
     const scrollY = window.scrollY + offset;
 
     if (direction === "next") {
@@ -1188,16 +1216,18 @@
   <PasteModal bind:visible={pasteVisible} defaultMode={pasteDefaultMode} />
   <OpenDialog bind:visible={openVisible} />
   <SettingsDialog bind:visible={settingsVisible} />
+  <LanguageDialog bind:visible={languageVisible} />
   <AboutDialog bind:visible={aboutVisible} />
   <CustomPromptModal bind:visible={customPromptVisible} selection={customPromptSelection} />
 
+  <div class="doc-area">
   {#if !rendererReady}
     <div class="state-center">
-      <p class="state-text pulse">Loading renderer...</p>
+      <p class="state-text pulse">{$t('page.loadingRenderer')}</p>
     </div>
   {:else if $docStore.loading}
     <div class="state-center">
-      <p class="state-text pulse">Opening file...</p>
+      <p class="state-text pulse">{$t('page.openingFile')}</p>
     </div>
   {:else if $docStore.error}
     <div class="state-center">
@@ -1233,6 +1263,7 @@
           lineHeight={$settings.lineHeight}
           maxWidth="100%"
           showLineNumbers={$settings.showLineNumbers}
+          syntaxHighlighting={$settings.syntaxHighlighting}
           split
         />
       {/key}
@@ -1253,6 +1284,7 @@
           lineHeight={$settings.lineHeight}
           maxWidth={contentMaxWidth}
           showLineNumbers={$settings.showLineNumbers}
+          syntaxHighlighting={$settings.syntaxHighlighting}
         />
       {/key}
     {:else if rawMode}
@@ -1298,6 +1330,7 @@
   {:else}
     <EmptyState onOpenUrl={() => { pasteDefaultMode = "url"; pasteVisible = true; }} />
   {/if}
+  </div>
   <UpdateToast />
   <Toast />
 </div>
@@ -1355,12 +1388,14 @@
   }
 
   /* Split preview pane (#19): fixed right half, mirroring the editor's fixed
-     left half. Scrolls independently. Sits below the toolbar+tabbar (75px). */
+     left half. Scrolls independently. Sits below the toolbar and top tabs
+     (`--chrome-top`, see utils/layout.ts). */
   .split-preview {
     position: fixed;
-    top: 75px;
+    top: var(--chrome-top, 88px);
     right: 0;
-    left: 50%;
+    /* The right half of what the side tabs panel leaves. */
+    left: calc(var(--tabs-w, 0px) + (100% - var(--tabs-w, 0px)) / 2);
     bottom: 0;
     overflow-y: auto;
     padding-bottom: 4rem;
@@ -1385,6 +1420,23 @@
   }
 
   :global(html.toc-resizing) .content-main {
+    transition: none;
+  }
+
+  /* Everything in the document column clears the side tabs panel; 0 wide
+     when the tabs are on top. The fixed parts (editor, split preview, ToC,
+     status bar) offset themselves by the same variable. */
+  .doc-area {
+    padding-left: var(--tabs-w, 0px);
+    transition: padding-left 0.15s ease;
+  }
+
+  :global(html.tabs-resizing) {
+    cursor: col-resize;
+    user-select: none;
+  }
+
+  :global(html.tabs-resizing) .doc-area {
     transition: none;
   }
 
