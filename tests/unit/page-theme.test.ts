@@ -14,6 +14,11 @@ describe("resolvePageTheme", () => {
     expect(resolvePageTheme("light", "dark")).toBe("light");
     expect(resolvePageTheme("dark", "light")).toBe("dark");
   });
+
+  it("follows the interface in split mode, so both halves match", () => {
+    expect(resolvePageTheme("dark", "light", true)).toBe("light");
+    expect(resolvePageTheme("light", "dark", true)).toBe("dark");
+  });
 });
 
 describe("cyclePageTheme", () => {

@@ -22,7 +22,7 @@
   import { initFileWatcher, stopFileWatcher } from "$lib/tauri/watcher";
   import { restoreSession } from "$lib/tauri/session";
   import { attachSplitSync, type SplitSync } from "$lib/utils/split-sync";
-  import { themeMode, cycleTheme } from "$lib/stores/theme";
+  import { themeMode, cycleTheme, splitView } from "$lib/stores/theme";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { invoke } from "@tauri-apps/api/core";
   import { tocVisible, tocEntries } from "$lib/stores/toc";
@@ -199,6 +199,12 @@
   let activeEditMode = $derived<"view" | "split" | "edit">(
     activeTab?.isEditing ? (splitMode ? "split" : "edit") : "view"
   );
+
+  // In split mode the editor follows the interface, so the preview must too,
+  // or one half would be dark and the other light (see stores/theme.ts).
+  $effect(() => {
+    splitView.set(activeEditMode === "split");
+  });
 
   // Publish the ToC width (#108) as a CSS variable so the fixed sidebar and the
   // document's left padding always agree on one number. It lives here rather
