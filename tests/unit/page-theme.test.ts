@@ -14,11 +14,6 @@ describe("resolvePageTheme", () => {
     expect(resolvePageTheme("light", "dark")).toBe("light");
     expect(resolvePageTheme("dark", "light")).toBe("dark");
   });
-
-  it("follows the interface in split mode, so both halves match", () => {
-    expect(resolvePageTheme("dark", "light", true)).toBe("light");
-    expect(resolvePageTheme("light", "dark", true)).toBe("dark");
-  });
 });
 
 describe("cyclePageTheme", () => {
@@ -50,6 +45,13 @@ describe("the page styles follow the page theme", () => {
     const search = read("src/lib/components/SearchOverlay.svelte");
     expect(search).not.toMatch(/html\.dark mark\./);
     expect(search).toMatch(/html\.page-dark mark\.mdv-search-highlight/);
+  });
+
+  it("in the split view, whose preview keeps the page theme next to the editor", () => {
+    // The page setting is not overridden while editing: a light page stays
+    // light beside a dark editor.
+    expect(read("src/routes/+page.svelte")).not.toContain("splitView");
+    expect(read("src/lib/stores/theme.ts")).not.toContain("splitView");
   });
 
   it("in the Quick Look preview, which reuses the renderer's styles", () => {
