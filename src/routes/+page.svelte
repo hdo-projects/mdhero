@@ -1427,6 +1427,15 @@
     background: #161618;
   }
 
+  /* Its scrollbar too, rather than the window's. */
+  .split-preview::-webkit-scrollbar-thumb {
+    background: #c1c1c4;
+  }
+
+  :global(html.page-dark) .split-preview::-webkit-scrollbar-thumb {
+    background: #3a3a3c;
+  }
+
   .content-main.toc-spaced {
     padding-left: var(--toc-w, 240px);
   }

@@ -64,6 +64,15 @@ describe("the page styles follow the page theme", () => {
     expect(read("src/lib/stores/theme.ts")).not.toContain("splitView");
   });
 
+  it("in the editor, which takes the page's theme next to the preview", () => {
+    // Its styles key off its own flag: the page's theme in split mode, the
+    // interface's on its own. A bare `html.dark` rule would pin it to the
+    // interface and bring back a dark editor beside a light page.
+    const editor = read("src/lib/components/Editor.svelte");
+    expect(editor).not.toContain(":global(html.dark)");
+    expect(editor).toMatch(/split \? \$pageDark : \$interfaceDark/);
+  });
+
   it("in the Quick Look preview, which reuses the renderer's styles", () => {
     expect(read("src/quicklook/preview.ts")).toContain('classList.toggle("page-dark"');
   });
