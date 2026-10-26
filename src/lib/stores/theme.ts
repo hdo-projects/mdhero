@@ -25,23 +25,17 @@ export function getEffectiveTheme(): "light" | "dark" {
   return mode;
 }
 
-/** True while the editor and the preview sit side by side (split mode). The
- *  page follows the interface then, so the two halves are not in different
- *  themes. */
-export const splitView = writable(false);
-
 /** The page's theme given its setting and the interface's resolved theme. */
 export function resolvePageTheme(
   mode: PageThemeMode,
   interfaceTheme: "light" | "dark",
-  split = false,
 ): "light" | "dark" {
-  return mode === "auto" || split ? interfaceTheme : mode;
+  return mode === "auto" ? interfaceTheme : mode;
 }
 
 export function applyCurrentTheme(): void {
   const theme = getEffectiveTheme();
-  const page = resolvePageTheme(get(settings).pageTheme, theme, get(splitView));
+  const page = resolvePageTheme(get(settings).pageTheme, theme);
   const html = globalThis.document?.documentElement;
   if (!html) return;
 
@@ -66,9 +60,6 @@ export function initThemeListener(): void {
     applyCurrentTheme();
   });
   settings.subscribe(() => {
-    applyCurrentTheme();
-  });
-  splitView.subscribe(() => {
     applyCurrentTheme();
   });
 }
