@@ -73,6 +73,16 @@ describe("the page styles follow the page theme", () => {
     expect(editor).toContain("let dark = $derived($pageDark);");
   });
 
+  it("without tinting the toolbar when the two themes differ", () => {
+    // The bar is translucent, so over a page canvas of the other theme it
+    // changes shade between the viewer and the editor. It keeps the
+    // interface's own colour when the page's theme differs, and the rules must
+    // not fire in Auto, where the two agree.
+    const toolbar = read("src/lib/components/Toolbar.svelte");
+    expect(toolbar).toContain(":global(html.dark:not(.page-dark)) .toolbar");
+    expect(toolbar).toContain(":global(html:not(.dark).page-dark) .toolbar");
+  });
+
   it("in the Quick Look preview, which reuses the renderer's styles", () => {
     expect(read("src/quicklook/preview.ts")).toContain('classList.toggle("page-dark"');
   });
