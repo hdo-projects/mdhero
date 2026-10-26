@@ -400,6 +400,12 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 12px;
+    /* The side tabs, the editor and the preview start at SIDE_TABS_CHROME
+       (utils/layout.ts) whatever the bar's own height turns out to be. A bar a
+       pixel short leaves a strip of the window showing under it: dark and
+       unseen while the window is the interface's colour, a light line in the
+       viewer once the page canvas is lighter. */
+    min-height: 44px;
     background: rgba(250, 250, 250, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
