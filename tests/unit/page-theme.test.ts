@@ -47,6 +47,16 @@ describe("the page styles follow the page theme", () => {
     expect(search).toMatch(/html\.page-dark mark\.mdv-search-highlight/);
   });
 
+  it("in the status bar and scroll button, which sit over the page", () => {
+    // Over the rendered page they take the page theme; the bare `html.dark`
+    // rules are left for the raw view, which shows no page.
+    for (const file of ["StatusBar", "ScrollToTop"]) {
+      const source = read(`src/lib/components/${file}.svelte`);
+      expect(source).toContain("html.page-dark .page-canvas");
+      expect(source).toContain("html .page-canvas");
+    }
+  });
+
   it("in the split view, whose preview keeps the page theme next to the editor", () => {
     // The page setting is not overridden while editing: a light page stays
     // light beside a dark editor.
