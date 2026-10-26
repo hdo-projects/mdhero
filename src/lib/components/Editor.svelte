@@ -5,7 +5,7 @@
   import { gutterHtml as buildGutterHtml, gutterWidth as buildGutterWidth, lineCount as countLines } from "$lib/utils/line-gutter";
   import { highlightMarkdownLines } from "$lib/utils/markdown-highlight";
   import { patchLines } from "$lib/utils/line-patch";
-  import { pageDark, interfaceDark } from "$lib/stores/theme";
+  import { pageDark } from "$lib/stores/theme";
 
   let {
     value,
@@ -27,10 +27,11 @@
     split?: boolean;
   } = $props();
 
-  // Next to the preview (split mode) the editor takes the page's theme, so the
-  // two halves match whatever the interface is in; on its own it follows the
-  // interface. Its styles key off this rather than `html.dark`.
-  let dark = $derived(split ? $pageDark : $interfaceDark);
+  // The editor holds the document's source, so it takes the page's theme, on
+  // its own as well as next to the preview (split mode): the text keeps the
+  // look the user chose for the document whatever the interface is in. Its
+  // styles key off this rather than `html.dark`.
+  let dark = $derived($pageDark);
 
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let backdropEl: HTMLDivElement | undefined = $state();

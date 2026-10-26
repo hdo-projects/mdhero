@@ -411,6 +411,20 @@
     border-bottom-color: #2c2c2e;
   }
 
+  /* The bar is translucent, so it takes a tint from what sits behind it: the
+     page canvas in the viewer, the window in the editor. When the page's theme
+     differs from the interface's those are different colours, and the bar
+     would change shade from one mode to the next (grey over a light page,
+     black over the window). Back it with the interface's own colour then. In
+     Auto the two agree and the bar stays as it was. */
+  :global(html.dark:not(.page-dark)) .toolbar {
+    background: rgb(22, 22, 24);
+  }
+
+  :global(html:not(.dark).page-dark) .toolbar {
+    background: rgb(250, 250, 250);
+  }
+
   .toolbar-left {
     display: flex;
     align-items: center;

@@ -12,11 +12,6 @@ export const themeMode = writable<ThemeMode>("system");
  *  colours (Mermaid). The same value is on <html> as the `page-dark` class. */
 export const pageDark = writable(false);
 
-/** Whether the interface is dark right now: the resolved value of the
- *  `dark` class on <html>, for components that pick between the interface's
- *  theme and the page's (the editor, which follows the page in split mode). */
-export const interfaceDark = writable(false);
-
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -47,7 +42,6 @@ export function applyCurrentTheme(): void {
   html.classList.toggle("dark", theme === "dark");
   html.classList.toggle("page-dark", page === "dark");
   pageDark.set(page === "dark");
-  interfaceDark.set(theme === "dark");
 }
 
 export function initThemeListener(): void {
