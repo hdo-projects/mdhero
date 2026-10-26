@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { resolvePageTheme, cyclePageTheme } from "../../src/lib/stores/theme";
+import { SIDE_TABS_CHROME } from "../../src/lib/utils/layout";
 
 // The rendered page has a theme of its own, apart from the interface's.
 describe("resolvePageTheme", () => {
@@ -81,6 +82,14 @@ describe("the page styles follow the page theme", () => {
     const toolbar = read("src/lib/components/Toolbar.svelte");
     expect(toolbar).toContain(":global(html.dark:not(.page-dark)) .toolbar");
     expect(toolbar).toContain(":global(html:not(.dark).page-dark) .toolbar");
+  });
+
+  it("without a seam under the toolbar", () => {
+    // The fixed panels start at SIDE_TABS_CHROME. A bar shorter than that
+    // leaves a strip of the window between them: invisible while the window
+    // is the interface's colour, a light line once the page canvas is lighter.
+    const toolbar = read("src/lib/components/Toolbar.svelte");
+    expect(toolbar).toContain(`min-height: ${SIDE_TABS_CHROME}px;`);
   });
 
   it("in the Quick Look preview, which reuses the renderer's styles", () => {
