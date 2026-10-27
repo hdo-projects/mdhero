@@ -35,7 +35,8 @@ export function resolvePageTheme(
 
 export function applyCurrentTheme(): void {
   const theme = getEffectiveTheme();
-  const page = resolvePageTheme(get(settings).pageTheme, theme);
+  const { separatePageTheme, pageTheme } = get(settings);
+  const page = resolvePageTheme(separatePageTheme ? pageTheme : "auto", theme);
   const html = globalThis.document?.documentElement;
   if (!html) return;
 

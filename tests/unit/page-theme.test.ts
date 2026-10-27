@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { resolvePageTheme, cyclePageTheme } from "../../src/lib/stores/theme";
@@ -14,6 +14,45 @@ describe("resolvePageTheme", () => {
   it("ignores the interface once set", () => {
     expect(resolvePageTheme("light", "dark")).toBe("light");
     expect(resolvePageTheme("dark", "light")).toBe("dark");
+  });
+});
+
+// The page theme only applies once "Separate page theme" is on: off, the page
+// follows the interface whatever pageTheme holds.
+describe("applyCurrentTheme", () => {
+  async function applied(separatePageTheme: boolean, interfaceTheme: "light" | "dark") {
+    const classes = new Set<string>();
+    vi.stubGlobal("document", {
+      documentElement: {
+        classList: {
+          toggle: (name: string, on: boolean) => void (on ? classes.add(name) : classes.delete(name)),
+        },
+      },
+    });
+    vi.resetModules();
+    const { get } = await import("svelte/store");
+    const { settings } = await import("../../src/lib/stores/settings");
+    const theme = await import("../../src/lib/stores/theme");
+    theme.themeMode.set(interfaceTheme);
+    settings.set({ ...get(settings), separatePageTheme, pageTheme: "dark" });
+    theme.applyCurrentTheme();
+    return { classes, pageDark: get(theme.pageDark) };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("follows the interface when the setting is off, whatever the page theme", async () => {
+    const { classes, pageDark } = await applied(false, "light");
+    expect(pageDark).toBe(false);
+    expect(classes.has("page-dark")).toBe(false);
+  });
+
+  it("uses the page theme when the setting is on", async () => {
+    const { classes, pageDark } = await applied(true, "light");
+    expect(pageDark).toBe(true);
+    expect(classes.has("page-dark")).toBe(true);
   });
 });
 

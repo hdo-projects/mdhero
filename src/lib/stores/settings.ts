@@ -25,8 +25,12 @@ export interface ReaderSettings {
   tabsPosition: "top" | "side";
   /** Width of the side tabs panel in px. */
   tabsWidth: number;
-  /** Theme of the rendered page, apart from the interface's: "auto" follows
-   *  the interface. */
+  /** Let the rendered page have a theme apart from the interface's (shows the
+   *  page button in the toolbar). Off: the page always follows the interface
+   *  and `pageTheme` is ignored. */
+  separatePageTheme: boolean;
+  /** Theme of the rendered page when `separatePageTheme` is on: "auto"
+   *  follows the interface. */
   pageTheme: "auto" | "light" | "dark";
 }
 
@@ -99,6 +103,7 @@ function loadSettings(): ReaderSettings {
     autoCheckUpdates: true,
     tabsPosition: "top",
     tabsWidth: DEFAULT_TABS_WIDTH,
+    separatePageTheme: false,
     pageTheme: "auto",
   };
 
@@ -123,6 +128,7 @@ function loadSettings(): ReaderSettings {
         autoCheckUpdates: storedBoolean(parsed.autoCheckUpdates, defaults.autoCheckUpdates),
         tabsPosition: parsed.tabsPosition === "side" ? "side" : "top",
         tabsWidth: clampTabsWidth(parsed.tabsWidth),
+        separatePageTheme: storedBoolean(parsed.separatePageTheme, defaults.separatePageTheme),
         pageTheme: ["light", "dark"].includes(parsed.pageTheme) ? parsed.pageTheme : "auto",
       };
     }
