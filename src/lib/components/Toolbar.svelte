@@ -354,8 +354,9 @@
     </button>
 
     <!-- The rendered page has its own theme, apart from the interface's: a
-         page icon that is empty (light), solid (dark) or half (same as the
-         interface). -->
+         page icon filled with the page's own background (+page.svelte), so it
+         reads the same in either interface theme: light, dark, or half of
+         each (same as the interface). -->
     <button
       onclick={handlePageThemeToggle}
       class="btn btn-icon page-theme-btn"
@@ -363,10 +364,9 @@
       aria-label={$t('toolbar.pageTheme', { mode: $t(THEME_NAMES[$settings.pageTheme]) })}
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round">
-        {#if $settings.pageTheme === "dark"}
-          <path d="M3.5 1.5h6L13 5v9.5H3.5z" fill="currentColor" />
-        {:else if $settings.pageTheme === "auto"}
-          <path d="M8.25 1.5h1.25L13 5v9.5H8.25z" fill="currentColor" stroke="none" />
+        <path d="M3.5 1.5h6L13 5v9.5H3.5z" fill={$settings.pageTheme === "dark" ? "#161618" : "#fafafa"} stroke="none" />
+        {#if $settings.pageTheme === "auto"}
+          <path d="M8.25 1.5h1.25L13 5v9.5H8.25z" fill="#161618" stroke="none" />
         {/if}
         <path d="M3.5 1.5h6L13 5v9.5H3.5z" />
         <path d="M9.5 1.5V5H13" />
