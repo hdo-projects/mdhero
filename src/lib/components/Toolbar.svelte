@@ -356,7 +356,9 @@
     <!-- The rendered page has its own theme, apart from the interface's: a
          page icon filled with the page's own background (+page.svelte), so it
          reads the same in either interface theme: light, dark, or half of
-         each (same as the interface). -->
+         each (same as the interface). Only with "Separate page theme" on in
+         the settings. -->
+    {#if $settings.separatePageTheme}
     <button
       onclick={handlePageThemeToggle}
       class="btn btn-icon page-theme-btn"
@@ -372,6 +374,7 @@
         <path d="M9.5 1.5V5H13" />
       </svg>
     </button>
+    {/if}
 
     <button
       onclick={handleThemeToggle}

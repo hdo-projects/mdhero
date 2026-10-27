@@ -227,6 +227,8 @@
     "openInExistingWindowHint": "Aus dem Dateimanager oder der Befehlszeile geöffnete Dateien werden hier als Tabs geöffnet statt in neuen Fenstern. Gilt ab dem nächsten Start von MDHero.",
     "tabsOnSide": "Tabs seitlich",
     "tabsOnSideHint": "Geöffnete Dateien in einem anpassbaren Bereich links statt in einer Leiste oben anzeigen.",
+    "separatePageTheme": "Separates Seitendesign",
+    "separatePageThemeHint": "Fügt der Symbolleiste eine Seitenschaltfläche hinzu, damit die Seite unabhängig von der Oberfläche hell oder dunkel sein kann. Aus: Die Seite folgt der Oberfläche.",
     "autoPresentMarp": "Marp-Deck automatisch präsentieren",
     "autoPresentMarpHint": "Dokumente mit {code} im Frontmatter als Slideshow öffnen.",
     "autoCheckUpdates": "Automatisch nach Updates suchen",
