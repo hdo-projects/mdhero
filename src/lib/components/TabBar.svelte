@@ -14,6 +14,7 @@
   import { newDocument, revealInFileManager } from "$lib/tauri/files";
   import { copyFileName, copyPath } from "$lib/utils/clipboard";
   import { createDelayedCall } from "$lib/utils/delayed-call";
+  import { tabsToClose, type CloseScope } from "$lib/utils/close-tabs";
   import { stripVerbatimPrefix, tabFolderLabel, tabsNeedingFolder } from "$lib/utils/path";
   import { GROUP_COLORS, groupLabel, isGroupEdge, tabRuns, type GroupColor } from "$lib/utils/tab-groups";
   import PanelResizer from "./PanelResizer.svelte";
@@ -21,9 +22,12 @@
 
   let {
     onCloseTab = (id: string) => tabStore.closeTab(id),
+    onCloseTabs = (ids: string[]) => ids.forEach((id) => tabStore.closeTab(id)),
   }: {
     /** Returns `false` when the user chose to keep the tab (unsaved changes). */
     onCloseTab?: (id: string) => void | boolean | Promise<void | boolean>;
+    /** Closes these tabs one after the other, asking about unsaved changes. */
+    onCloseTabs?: (ids: string[]) => void;
   } = $props();
 
   const { tabs, activeTabId, groups } = tabStore;
@@ -423,6 +427,20 @@
     onCloseTab(id);
   }
 
+  // Close Other Tabs / Tabs to the Right (Below) / All Tabs (#127).
+  function handleCloseManyFromMenu(scope: CloseScope) {
+    if (!contextMenuTab) return;
+    const anchor = contextMenuTab.id;
+    const ids = tabsToClose($tabs, anchor, scope);
+    closeContextMenu();
+    // As in a browser, the tab the menu was opened on takes the place of the one
+    // on show when that one is about to go.
+    if (scope !== "all" && $activeTabId !== null && ids.includes($activeTabId)) {
+      tabStore.switchTab(anchor);
+    }
+    onCloseTabs(ids);
+  }
+
   function handleTogglePositionFromMenu() {
     closeContextMenu();
     toggleTabsPosition();
@@ -616,6 +634,23 @@
     <div class="dropdown-separator"></div>
     <button onclick={handleCloseFromMenu} class="dropdown-item">
       <span>{$t('menu.closeTab')}</span>
+    </button>
+    <button
+      onclick={() => handleCloseManyFromMenu("others")}
+      class="dropdown-item"
+      disabled={$tabs.length < 2}
+    >
+      <span>{$t('tabbar.closeOtherTabs')}</span>
+    </button>
+    <button
+      onclick={() => handleCloseManyFromMenu("after")}
+      class="dropdown-item"
+      disabled={$tabs[$tabs.length - 1]?.id === contextMenuTab.id}
+    >
+      <span>{side ? $t('tabbar.closeTabsBelow') : $t('tabbar.closeTabsToRight')}</span>
+    </button>
+    <button onclick={() => handleCloseManyFromMenu("all")} class="dropdown-item">
+      <span>{$t('menu.closeAllTabs')}</span>
     </button>
     <div class="dropdown-separator"></div>
     <button onclick={handleTogglePositionFromMenu} class="dropdown-item">
@@ -1328,12 +1363,18 @@
     color: #e5e5e7;
   }
 
-  .dropdown-item:hover {
+  .dropdown-item:hover:not(:disabled) {
     background: #f2f2f7;
   }
 
-  :global(html.dark) .dropdown-item:hover {
+  :global(html.dark) .dropdown-item:hover:not(:disabled) {
     background: #3a3a3c;
+  }
+
+  /* An entry with nothing to act on, e.g. Close Other Tabs with a single tab. */
+  .dropdown-item:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
   .dropdown-separator {
