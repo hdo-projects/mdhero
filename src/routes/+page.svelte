@@ -1172,7 +1172,6 @@
         loading: false,
         error: null,
       });
-      tocVisible.set(false);
       tocEntries.set([]);
       getCurrentWindow().setTitle("MDHero").catch(() => {});
       return;
